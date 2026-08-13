@@ -5,6 +5,14 @@
 export { err, ok } from './result.js';
 export { expandRecurrence } from './recurrence.js';
 export { validateSnapshot } from './validate.js';
+export {
+  ancestorCalendarIds,
+  descendantCalendarIds,
+  inheritsBlocks,
+  parentCalendarId,
+  requiredCalendarIds,
+  rollsUpTo,
+} from './hierarchy.js';
 
 export type {
   ApplyOptions,
