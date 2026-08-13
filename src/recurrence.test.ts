@@ -309,6 +309,93 @@ describe( 'expandRecurrence', () => {
     } );
   } );
 
+  test( 'overnight rule lookbehind still intersects the next morning', () => {
+    const result = expandRecurrence(
+      rule(
+        { freq: 'weekly', byDay: [ 'TU' ] },
+        { startTime: '22:00', endTime: '02:00' },
+      ),
+      civilRange( '2026-09-09', '2026-09-10' ),
+      TZ,
+    );
+    expect( result ).toEqual( {
+      ok: true,
+      value: [
+        {
+          start: '2026-09-09T02:00:00.000Z',
+          end: '2026-09-09T06:00:00.000Z',
+        },
+      ],
+    } );
+  } );
+
+  test( 'rule daily interval 2 aligns to the range-start civil date', () => {
+    const result = expandRecurrence(
+      rule( { freq: 'daily', interval: 2 } ),
+      civilRange( '2026-09-08', '2026-09-13' ),
+      TZ,
+    );
+    expect( result ).toEqual( {
+      ok: true,
+      value: [
+        {
+          start: '2026-09-08T13:00:00.000Z',
+          end: '2026-09-08T14:00:00.000Z',
+        },
+        {
+          start: '2026-09-10T13:00:00.000Z',
+          end: '2026-09-10T14:00:00.000Z',
+        },
+        {
+          start: '2026-09-12T13:00:00.000Z',
+          end: '2026-09-12T14:00:00.000Z',
+        },
+      ],
+    } );
+  } );
+
+  test( 'rule daily count 2 starts at the range-start civil date', () => {
+    const result = expandRecurrence(
+      rule( { freq: 'daily', count: 2 } ),
+      civilRange( '2026-09-08', '2026-09-20' ),
+      TZ,
+    );
+    expect( result ).toEqual( {
+      ok: true,
+      value: [
+        {
+          start: '2026-09-08T13:00:00.000Z',
+          end: '2026-09-08T14:00:00.000Z',
+        },
+        {
+          start: '2026-09-09T13:00:00.000Z',
+          end: '2026-09-09T14:00:00.000Z',
+        },
+      ],
+    } );
+  } );
+
+  test( 'rule weekly interval 2 aligns weeks to the range-start Monday', () => {
+    const result = expandRecurrence(
+      rule( { freq: 'weekly', interval: 2, byDay: [ 'MO' ] } ),
+      civilRange( '2026-09-14', '2026-10-12' ),
+      TZ,
+    );
+    expect( result ).toEqual( {
+      ok: true,
+      value: [
+        {
+          start: '2026-09-14T13:00:00.000Z',
+          end: '2026-09-14T14:00:00.000Z',
+        },
+        {
+          start: '2026-09-28T13:00:00.000Z',
+          end: '2026-09-28T14:00:00.000Z',
+        },
+      ],
+    } );
+  } );
+
   test( 'range start >= end returns a range error', () => {
     const result = expandRecurrence(
       event( { freq: 'daily' } ),

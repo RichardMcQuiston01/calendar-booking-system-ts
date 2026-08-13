@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- Rule expansion aligns `interval`/`count` to the range-start civil
+  date; overnight lookbehind no longer shifts the series origin
+
 ### Added
 
 - `expandRecurrence` for event and availability-rule occurrences

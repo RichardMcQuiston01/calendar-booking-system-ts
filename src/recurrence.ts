@@ -212,9 +212,10 @@ export function expandRecurrence(
     return ok( [] );
   }
 
+  const rangeStartDate = civilDateInZone( range.start, zone );
   const dtStart = isCalendarEvent( source )
     ? civilDateInZone( source.start, zone )
-    : addDays( civilDateInZone( range.start, zone ), -1 );
+    : rangeStartDate;
   const stopDate = addDays( civilDateInZone( range.end, zone ), 1 );
   const interval = recurrence.interval ?? 1;
   const excluded = new Set( source.excludedDates ?? [] );
@@ -222,40 +223,58 @@ export function expandRecurrence(
   const occurrences: Occurrence[] = [];
   let produced = 0;
 
-  for ( const date of iterateCivilDates(
-    recurrence,
-    dtStart,
-    stopDate,
-    interval,
-  ) ) {
+  const consider = (
+    date: DateOnly,
+    countIfNoOverlap: boolean,
+  ): boolean => {
     const occ = isCalendarEvent( source )
       ? occurrenceForEvent( source, zone, date )
       : occurrenceForRule( source, zone, date );
     if ( occ === undefined ) {
-      continue;
+      return true;
     }
     if (
       byDay !== undefined &&
       byDay.length > 0 &&
       !byDay.includes( weekdayInZone( occ.start, zone ) )
     ) {
-      continue;
+      return true;
     }
     if ( recurrence.until !== undefined && occ.start > recurrence.until ) {
-      break;
+      return false;
+    }
+    const hits = overlaps( occ, range );
+    if ( !hits && !countIfNoOverlap ) {
+      return true;
     }
     produced += 1;
     if (
       recurrence.count !== undefined &&
       produced > recurrence.count
     ) {
-      break;
+      return false;
     }
     if ( excluded.has( civilDateInZone( occ.start, zone ) ) ) {
-      continue;
+      return true;
     }
-    if ( overlaps( occ, range ) ) {
+    if ( hits ) {
       occurrences.push( occ );
+    }
+    return true;
+  };
+
+  if ( !isCalendarEvent( source ) ) {
+    consider( addDays( rangeStartDate, -1 ), false );
+  }
+
+  for ( const date of iterateCivilDates(
+    recurrence,
+    dtStart,
+    stopDate,
+    interval,
+  ) ) {
+    if ( !consider( date, true ) ) {
+      break;
     }
   }
 
