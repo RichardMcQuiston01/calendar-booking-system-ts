@@ -11,5 +11,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Design spec for the headless scheduling calendar engine
   (`docs/superpowers/specs/2026-08-12-scheduling-calendar-design.md`)
+- Implementation plan for the engine
+  (`docs/superpowers/plans/2026-08-12-scheduling-calendar-engine.md`)
 - Project README describing purpose, non-goals, and planned API
 - `.gitignore` for a bun TypeScript library
