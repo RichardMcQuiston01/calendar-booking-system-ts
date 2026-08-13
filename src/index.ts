@@ -19,6 +19,7 @@ export {
   ownExclusiveBusy,
 } from './occupancy.js';
 export { openAvailability } from './availability.js';
+export { queryAvailability, queryView } from './query.js';
 export {
   putCalendar,
   putEntity,

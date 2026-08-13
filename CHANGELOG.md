@@ -14,6 +14,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Query wrappers (`queryAvailability`, `queryView`) that tag
+  intervals as `own`, `inherited`, or `rolled-up`
 - Graph writes (`put*` / `remove*` for entities, calendars, links)
   and check/apply commands for events, rules, slots, and bookings
 - Exclusive busy and open-hours helpers (`ownExclusiveBusy`,
