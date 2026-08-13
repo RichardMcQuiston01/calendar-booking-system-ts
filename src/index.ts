@@ -13,6 +13,12 @@ export {
   requiredCalendarIds,
   rollsUpTo,
 } from './hierarchy.js';
+export {
+  effectiveExclusiveBusy,
+  inheritedBlocks,
+  ownExclusiveBusy,
+} from './occupancy.js';
+export { openAvailability } from './availability.js';
 
 export type {
   ApplyOptions,

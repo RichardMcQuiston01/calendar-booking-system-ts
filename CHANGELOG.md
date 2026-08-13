@@ -14,6 +14,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Exclusive busy and open-hours helpers (`ownExclusiveBusy`,
+  `inheritedBlocks`, `effectiveExclusiveBusy`, `openAvailability`)
 - Calendar parentage helpers (`parentCalendarId`,
   `ancestorCalendarIds`, `descendantCalendarIds`,
   `requiredCalendarIds`, `rollsUpTo`, `inheritsBlocks`)
