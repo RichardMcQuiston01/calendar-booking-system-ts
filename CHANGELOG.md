@@ -15,3 +15,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   (`docs/superpowers/plans/2026-08-12-scheduling-calendar-engine.md`)
 - Project README describing purpose, non-goals, and planned API
 - `.gitignore` for a bun TypeScript library
+- Bun TypeScript package skeleton (`package.json`, `tsconfig.json`,
+  `eslint.config.js`, empty public entry `src/index.ts`)
+- Reference PostgreSQL schema (`sql/schema.sql`) with singular snake_case
+  tables from the design spec §5.2

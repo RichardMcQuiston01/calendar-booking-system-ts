@@ -6,7 +6,7 @@ Each **entity** (school, term, section, course, teacher, student, or a host-defi
 
 This package is a **pure engine**. You pass a snapshot in; you get a report or a new snapshot out. There is no UI, HTTP server, or database connection.
 
-**Status:** design approved. Implementation has not started. The spec is the source of truth until the first release.
+**Status:** package skeleton and reference SQL schema in place. Engine modules land in later tasks. The spec remains the source of truth until the first release.
 
 ## Spec
 
@@ -46,10 +46,14 @@ if (booked.ok) {
 Use **bun**, not npm.
 
 ```bash
-bun run typecheck
-bun run test
-bun run lint
+bun install
+bun run typecheck   # tsc --noEmit
+bun run test        # bun test
+bun run lint        # eslint src sql
+bun run build       # emit dist/
 ```
+
+Reference PostgreSQL DDL matching the TypeScript model lives in [`sql/schema.sql`](sql/schema.sql). The engine never executes SQL; hosts apply the schema (or an equivalent) themselves.
 
 Work on `feature/*` branches from `dev`. Merge each completed stage into `dev`. Merge `dev` into `main` when v1 is complete and tested.
 
