@@ -166,14 +166,11 @@ function temporalApi(): TemporalApi | undefined {
 }
 
 function zonedInstantFromTemporal(
+  temporal: TemporalApi,
   dateOnly: DateOnly,
   clockTime: ClockTime,
   timeZone: TimeZone,
 ): Instant | undefined {
-  const temporal = temporalApi();
-  if ( !temporal ) {
-    return undefined;
-  }
   const [ year, month, day ] = dateOnly.split( '-' ).map( Number );
   const [ hour, minute ] = clockTime.split( ':' ).map( Number );
   try {
@@ -198,38 +195,42 @@ function zonedInstantByIteration(
   clockTime: ClockTime,
   timeZone: TimeZone,
 ): Instant | undefined {
-  const guess = Date.parse( `${ dateOnly }T${ clockTime }:00.000Z` );
-  if ( Number.isNaN( guess ) ) {
-    return undefined;
-  }
-  const [ year, month, day ] = dateOnly.split( '-' ).map( Number );
-  const [ hour, minute ] = clockTime.split( ':' ).map( Number );
-  const want = Date.UTC( year, month - 1, day, hour, minute, 0, 0 );
-  let utc = guess;
-  for ( let i = 0; i < 8; i += 1 ) {
-    const parts = civilPartsInZone( new Date( utc ), timeZone );
-    const got = Date.UTC(
-      Number( parts.year ),
-      Number( parts.month ) - 1,
-      Number( parts.day ),
-      Number( parts.hour ),
-      Number( parts.minute ),
-      0,
-      0,
-    );
-    const delta = want - got;
-    if ( delta === 0 ) {
-      if (
-        `${ parts.year }-${ parts.month }-${ parts.day }` === dateOnly &&
-        `${ parts.hour }:${ parts.minute }` === clockTime
-      ) {
-        return toInstant( new Date( utc ) );
-      }
+  try {
+    const guess = Date.parse( `${ dateOnly }T${ clockTime }:00.000Z` );
+    if ( Number.isNaN( guess ) ) {
       return undefined;
     }
-    utc += delta;
+    const [ year, month, day ] = dateOnly.split( '-' ).map( Number );
+    const [ hour, minute ] = clockTime.split( ':' ).map( Number );
+    const want = Date.UTC( year, month - 1, day, hour, minute, 0, 0 );
+    let utc = guess;
+    for ( let i = 0; i < 8; i += 1 ) {
+      const parts = civilPartsInZone( new Date( utc ), timeZone );
+      const got = Date.UTC(
+        Number( parts.year ),
+        Number( parts.month ) - 1,
+        Number( parts.day ),
+        Number( parts.hour ),
+        Number( parts.minute ),
+        0,
+        0,
+      );
+      const delta = want - got;
+      if ( delta === 0 ) {
+        if (
+          `${ parts.year }-${ parts.month }-${ parts.day }` === dateOnly &&
+          `${ parts.hour }:${ parts.minute }` === clockTime
+        ) {
+          return toInstant( new Date( utc ) );
+        }
+        return undefined;
+      }
+      utc += delta;
+    }
+    return undefined;
+  } catch {
+    return undefined;
   }
-  return undefined;
 }
 
 /**
@@ -241,10 +242,16 @@ export function zonedInstant(
   clockTime: ClockTime,
   timeZone: TimeZone,
 ): Instant | undefined {
-  return (
-    zonedInstantFromTemporal( dateOnly, clockTime, timeZone ) ??
-    zonedInstantByIteration( dateOnly, clockTime, timeZone )
-  );
+  const temporal = temporalApi();
+  if ( temporal ) {
+    return zonedInstantFromTemporal(
+      temporal,
+      dateOnly,
+      clockTime,
+      timeZone,
+    );
+  }
+  return zonedInstantByIteration( dateOnly, clockTime, timeZone );
 }
 
 /** Current time as a normalized UTC instant. */
