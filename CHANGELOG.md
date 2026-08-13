@@ -7,34 +7,46 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- v0 scheduling calendar engine: hosts pass an immutable
+  `CalendarSnapshot` and receive a `Result` — a report or a new
+  snapshot to persist. No UI, HTTP, or database connection.
+
+  Public surface (`src/index.ts`):
+
+  - Domain types, `Result` helpers (`ok` / `err`), and
+    `validateSnapshot`
+  - `expandRecurrence` (civil-time daily/weekly/yearly, EXDATE,
+    DST, overnight windows)
+  - Hierarchy (`parentCalendarId`, `ancestorCalendarIds`,
+    `descendantCalendarIds`, `requiredCalendarIds`, `rollsUpTo`,
+    `inheritsBlocks`)
+  - Occupancy and open hours (`ownExclusiveBusy`,
+    `inheritedBlocks`, `effectiveExclusiveBusy`,
+    `openAvailability`)
+  - Graph writes (`put*` / `remove*` for entities, calendars,
+    links)
+  - Check/apply for events, availability rules, slots, and
+    bookings (`allowConflicts` overrides occupancy only)
+  - Queries (`queryAvailability`, `queryView`) tagged `own` /
+    `inherited` / `rolled-up`
+
+- README: install (`bun add` placeholder and local `bun link`),
+  snapshot shape, inheritance modes, check-then-apply and query
+  examples, non-goals, and development scripts
+- README-shaped integration test that puts a teacher calendar,
+  books open time, and asserts the availability hole
+- Reference PostgreSQL schema (`sql/schema.sql`) matching spec
+  §5.2
+- Design spec
+  (`docs/superpowers/specs/2026-08-12-scheduling-calendar-design.md`)
+- Implementation plan
+  (`docs/superpowers/plans/2026-08-12-scheduling-calendar-engine.md`)
+- Bun TypeScript package skeleton (`package.json`, `tsconfig.json`,
+  `eslint.config.js`, `.gitignore`)
+
 ### Fixed
 
 - Rule expansion aligns `interval`/`count` to the range-start civil
   date; overnight lookbehind no longer shifts the series origin
-
-### Added
-
-- Query wrappers (`queryAvailability`, `queryView`) that tag
-  intervals as `own`, `inherited`, or `rolled-up`
-- Graph writes (`put*` / `remove*` for entities, calendars, links)
-  and check/apply commands for events, rules, slots, and bookings
-- Exclusive busy and open-hours helpers (`ownExclusiveBusy`,
-  `inheritedBlocks`, `effectiveExclusiveBusy`, `openAvailability`)
-- Calendar parentage helpers (`parentCalendarId`,
-  `ancestorCalendarIds`, `descendantCalendarIds`,
-  `requiredCalendarIds`, `rollsUpTo`, `inheritsBlocks`)
-- `expandRecurrence` for event and availability-rule occurrences
-  (civil-time daily/weekly/yearly, EXDATE, DST, overnight windows)
-- Domain types, `Result` helpers (`ok` / `err`), UUID/time utilities,
-  and `validateSnapshot` for snapshot shape and integrity checks
-
-- Design spec for the headless scheduling calendar engine
-  (`docs/superpowers/specs/2026-08-12-scheduling-calendar-design.md`)
-- Implementation plan for the engine
-  (`docs/superpowers/plans/2026-08-12-scheduling-calendar-engine.md`)
-- Project README describing purpose, non-goals, and planned API
-- `.gitignore` for a bun TypeScript library
-- Bun TypeScript package skeleton (`package.json`, `tsconfig.json`,
-  `eslint.config.js`, empty public entry `src/index.ts`)
-- Reference PostgreSQL schema (`sql/schema.sql`) with singular snake_case
-  tables from the design spec §5.2
