@@ -19,6 +19,30 @@ export {
   ownExclusiveBusy,
 } from './occupancy.js';
 export { openAvailability } from './availability.js';
+export {
+  putCalendar,
+  putEntity,
+  putEntityCalendar,
+  removeCalendar,
+  removeEntity,
+  removeEntityCalendar,
+} from './graph.js';
+export { checkBooking, checkEvent, checkSlot } from './conflicts.js';
+export {
+  applyAvailabilityRule,
+  applyBooking,
+  applyEvent,
+  applySlot,
+  cancelBooking,
+  deleteAvailabilityRule,
+  deleteEvent,
+  deleteSlot,
+  excludeOccurrence,
+  updateAvailabilityRule,
+  updateBooking,
+  updateEvent,
+  updateSlot,
+} from './apply.js';
 
 export type {
   ApplyOptions,
