@@ -23,6 +23,7 @@ import type {
   Instant,
   Occupancy,
   Occurrence,
+  RecurrenceRule,
   Result,
   SlotInput,
   TimeRange,
@@ -33,6 +34,8 @@ import { validateSnapshot } from './validate.js';
 const COMMAND_STAMP = '1970-01-01T00:00:00.000Z';
 
 const DEFAULT_OCCUPANCY: Occupancy = { kind: 'exclusive' };
+
+const DAY_MS = 24 * 60 * 60 * 1000;
 
 function notFound( kind: string, id: Uuid ): Result<never> {
   return err( {
@@ -60,15 +63,64 @@ function calendarOf(
 function paddedRange( start: Instant, end: Instant ): TimeRange {
   const startAt = parseInstant( start );
   const endAt = parseInstant( end );
-  const day = 24 * 60 * 60 * 1000;
   return {
     start: toInstant(
-      new Date( ( startAt ?? new Date( 0 ) ).getTime() - day ),
+      new Date( ( startAt ?? new Date( 0 ) ).getTime() - DAY_MS ),
     ),
     end: toInstant(
-      new Date( ( endAt ?? new Date( 0 ) ).getTime() + day ),
+      new Date( ( endAt ?? new Date( 0 ) ).getTime() + DAY_MS ),
     ),
   };
+}
+
+function addUtcYears( date: Date, years: number ): Date {
+  const next = new Date( date.getTime() );
+  next.setUTCFullYear( next.getUTCFullYear() + years );
+  return next;
+}
+
+function countHorizonStart(
+  startAt: Date,
+  rule: RecurrenceRule,
+  count: number,
+): Date {
+  const interval = rule.interval ?? 1;
+  const steps = Math.max( 0, count - 1 ) * interval;
+  if ( rule.freq === 'daily' ) {
+    return new Date( startAt.getTime() + steps * DAY_MS );
+  }
+  if ( rule.freq === 'weekly' ) {
+    return new Date( startAt.getTime() + steps * 7 * DAY_MS );
+  }
+  return addUtcYears( startAt, steps );
+}
+
+/**
+ * Conflict window for an event: prototype ±1 day, or the series
+ * bound when the event recurs (`until`, `count`, else one year).
+ */
+function eventConflictRange( record: CalendarEvent ): TimeRange {
+  if ( record.recurrence === undefined ) {
+    return paddedRange( record.start, record.end );
+  }
+  const startAt = parseInstant( record.start ) ?? new Date( 0 );
+  const endAt = parseInstant( record.end ) ?? startAt;
+  const duration = Math.max( 0, endAt.getTime() - startAt.getTime() );
+  const rule = record.recurrence;
+  let boundEnd = endAt.getTime();
+  if ( rule.until !== undefined ) {
+    const untilAt = parseInstant( rule.until ) ?? startAt;
+    boundEnd = Math.max( boundEnd, untilAt.getTime() + duration );
+  } else if ( rule.count !== undefined ) {
+    const lastStart = countHorizonStart( startAt, rule, rule.count );
+    boundEnd = Math.max( boundEnd, lastStart.getTime() + duration );
+  } else {
+    boundEnd = Math.max(
+      boundEnd,
+      addUtcYears( startAt, 1 ).getTime() + duration,
+    );
+  }
+  return paddedRange( record.start, toInstant( new Date( boundEnd ) ) );
 }
 
 function contains(
@@ -359,7 +411,7 @@ function collectEventConflicts(
   if ( calendar === undefined ) {
     return notFound( 'calendar', record.calendarId );
   }
-  const range = paddedRange( record.start, record.end );
+  const range = eventConflictRange( record );
   const expanded = expandRecurrence(
     record,
     range,

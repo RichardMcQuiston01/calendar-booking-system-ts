@@ -123,6 +123,7 @@ describe( 'applyEvent', () => {
     const snapshot = teacherSnapshot( {
       events: [ eventOn( IDS.teacherCal ) ],
     } );
+    const events = snapshot.events;
     const result = applyEvent( snapshot, eventInput(), { now: NOW } );
     expect( result.ok ).toBe( false );
     if ( result.ok ) {
@@ -131,6 +132,7 @@ describe( 'applyEvent', () => {
     expect( result.error.code ).toBe( 'conflict' );
     expect( result.error.conflicts ).toHaveLength( 1 );
     expect( snapshot.events ).toHaveLength( 1 );
+    expect( snapshot.events ).toBe( events );
   } );
 
   test( 'allowConflicts commits a new snapshot', () => {

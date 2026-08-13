@@ -82,14 +82,6 @@ export function isValidDateOnly( value: string ): boolean {
   );
 }
 
-/**
- * Half-open overlap: `[a.start, a.end)` intersects `[b.start, b.end)`.
- * Touching endpoints do not overlap.
- */
-export function overlaps( a: TimeRange, b: TimeRange ): boolean {
-  return a.start < b.end && b.start < a.end;
-}
-
 /** Format a `Date` as a normalized UTC instant. */
 export function toInstant( date: Date ): Instant {
   return date.toISOString();
@@ -102,6 +94,30 @@ export function parseInstant( value: string ): Date | undefined {
     return undefined;
   }
   return new Date( ms );
+}
+
+/**
+ * Half-open overlap: `[a.start, a.end)` intersects `[b.start, b.end)`.
+ * Touching endpoints do not overlap. Instants are compared by epoch
+ * milliseconds after a successful parse.
+ */
+export function overlaps( a: TimeRange, b: TimeRange ): boolean {
+  const aStart = parseInstant( a.start );
+  const aEnd = parseInstant( a.end );
+  const bStart = parseInstant( b.start );
+  const bEnd = parseInstant( b.end );
+  if (
+    aStart === undefined ||
+    aEnd === undefined ||
+    bStart === undefined ||
+    bEnd === undefined
+  ) {
+    return false;
+  }
+  return (
+    aStart.getTime() < bEnd.getTime() &&
+    bStart.getTime() < aEnd.getTime()
+  );
 }
 
 type CivilParts = {

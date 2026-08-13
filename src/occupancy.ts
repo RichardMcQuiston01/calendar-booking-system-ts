@@ -166,6 +166,7 @@ function inheritedUnchecked(
 /**
  * Exclusive busy on this calendar: expanded events (all occupancies),
  * slots, and ad-hoc bookings that intersect `range`.
+ * Unknown `calendarId` yields `[]` (queries use `not_found`).
  */
 export function ownExclusiveBusy(
   snapshot: CalendarSnapshot,
@@ -190,6 +191,7 @@ export function ownExclusiveBusy(
  * Ancestor events and ad-hoc bookings inherited by this calendar.
  * Parent slots are never inherited. The chain stops when a calendar
  * does not inherit blocks or has no parent calendar.
+ * Unknown `calendarId` yields `[]` (queries use `not_found`).
  */
 export function inheritedBlocks(
   snapshot: CalendarSnapshot,
@@ -212,6 +214,7 @@ export function inheritedBlocks(
 
 /**
  * Own exclusive busy union inherited ancestor blocks.
+ * Unknown `calendarId` yields `[]` (queries use `not_found`).
  */
 export function effectiveExclusiveBusy(
   snapshot: CalendarSnapshot,

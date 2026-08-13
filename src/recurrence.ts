@@ -1,6 +1,7 @@
 import { err, ok } from './result.js';
 import {
   civilDateInZone,
+  isValidTimeZone,
   overlaps,
   parseInstant,
   toInstant,
@@ -202,6 +203,13 @@ export function expandRecurrence(
   const zone = isCalendarEvent( source )
     ? ( source.timeZone ?? timeZone )
     : timeZone;
+
+  if ( !isValidTimeZone( zone ) ) {
+    return err( {
+      code: 'validation',
+      message: 'time zone is invalid',
+    } );
+  }
 
   if ( isCalendarEvent( source ) && source.recurrence === undefined ) {
     return ok( singleEventOccurrences( source, range, zone ) );

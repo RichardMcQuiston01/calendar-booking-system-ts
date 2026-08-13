@@ -35,6 +35,29 @@ test( 'overlapping intervals overlap', () => {
   ) ).toBe( true );
 } );
 
+test( 'equivalent instants in different lexical forms overlap', () => {
+  expect( overlaps(
+    {
+      start: '2026-09-08T13:00:00.000Z',
+      end: '2026-09-08T14:00:00.000Z',
+    },
+    {
+      start: '2026-09-08T09:00:00.000-04:00',
+      end: '2026-09-08T10:00:00.000-04:00',
+    },
+  ) ).toBe( true );
+  expect( overlaps(
+    {
+      start: '2026-09-08T13:00:00.000Z',
+      end: '2026-09-08T14:00:00.000Z',
+    },
+    {
+      start: '2026-09-08T13:00:00Z',
+      end: '2026-09-08T14:00:00Z',
+    },
+  ) ).toBe( true );
+} );
+
 test( 'civil date and weekday follow the zone', () => {
   // 2026-09-08 00:30 EDT = 04:30Z
   const instant = '2026-09-08T04:30:00.000Z';

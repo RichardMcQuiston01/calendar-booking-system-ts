@@ -92,6 +92,13 @@ conflicts exist — “ok” means the check ran. Inspect
 `allowConflicts !== true` returns `{ ok: false, error: { code:
 'conflict' } }` and the same snapshot reference.
 
+Recurring `checkEvent` / `applyEvent` expand the series through
+`recurrence.until` (plus one local day), or far enough to cover
+`recurrence.count` (plus one local day). When neither bound is
+set, the engine uses a **one-year horizon from the prototype
+start**. Hosts that need a longer unbounded series should set
+`until` or `count`.
+
 ```ts
 import {
   applyAvailabilityRule,
@@ -208,6 +215,11 @@ may be placed (working-hours rules minus events, slots, other ad-hoc
 bookings, and inherited blocks). Slots are not ad-hoc-open; book them
 with `slotId`. `queryView` lists items that intersect the range,
 tagged `own`, `inherited`, or `rolled-up`.
+
+Occupancy helpers (`ownExclusiveBusy`, `inheritedBlocks`,
+`effectiveExclusiveBusy`) return `[]` when `calendarId` is not in
+the snapshot. `queryAvailability` and `queryView` return
+`not_found` for an unknown calendar.
 
 ```ts
 import {

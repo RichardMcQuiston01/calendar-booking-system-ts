@@ -132,13 +132,15 @@ function excludedDatesMessage(
 }
 
 function rangeMessage( start: string, end: string ): string | undefined {
-  if ( parseInstant( start ) === undefined ) {
+  const startAt = parseInstant( start );
+  if ( startAt === undefined ) {
     return 'start is not an instant';
   }
-  if ( parseInstant( end ) === undefined ) {
+  const endAt = parseInstant( end );
+  if ( endAt === undefined ) {
     return 'end is not an instant';
   }
-  if ( start >= end ) {
+  if ( startAt.getTime() >= endAt.getTime() ) {
     return 'start must be before end';
   }
   return undefined;

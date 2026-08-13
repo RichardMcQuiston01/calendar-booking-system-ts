@@ -145,6 +145,18 @@ describe( 'validateSnapshot', () => {
     } );
   } );
 
+  test( 'rejects start after end when offset hides the inversion', () => {
+    const snapshot = schoolTreeSnapshot();
+    snapshot.events.push( eventOn( IDS.schoolCal, {
+      start: '2026-09-08T10:00:00.000-04:00',
+      end: '2026-09-08T13:30:00.000Z',
+    } ) );
+    expect( validateSnapshot( snapshot ) ).toMatchObject( {
+      ok: false,
+      error: { code: 'validation' },
+    } );
+  } );
+
   test( 'rejects an event with start === end', () => {
     const snapshot = schoolTreeSnapshot();
     snapshot.events.push( eventOn( IDS.schoolCal, {

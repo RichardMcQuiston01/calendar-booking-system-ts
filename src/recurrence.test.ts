@@ -396,6 +396,19 @@ describe( 'expandRecurrence', () => {
     } );
   } );
 
+  test( 'unknown IANA zone returns validation', () => {
+    const result = expandRecurrence(
+      event( { freq: 'daily' } ),
+      civilRange( '2026-09-08', '2026-09-10' ),
+      'Not/AZone',
+    );
+    expect( result.ok ).toBe( false );
+    if ( result.ok ) {
+      return;
+    }
+    expect( result.error.code ).toBe( 'validation' );
+  } );
+
   test( 'range start >= end returns a range error', () => {
     const result = expandRecurrence(
       event( { freq: 'daily' } ),

@@ -205,6 +205,30 @@ describe( 'checkEvent', () => {
     }
     expect( open.value.conflicts ).toEqual( [] );
   } );
+
+  test( 'weekly from Sep 8 conflicts with exclusive on Sep 22', () => {
+    const snapshot = teacherSnapshot( {
+      events: [ eventOn( IDS.teacherCal, {
+        start: '2026-09-22T13:00:00.000Z',
+        end: '2026-09-22T14:00:00.000Z',
+      } ) ],
+    } );
+    const result = checkEvent( snapshot, eventInput( {
+      start: '2026-09-08T13:00:00.000Z',
+      end: '2026-09-08T14:00:00.000Z',
+      recurrence: { freq: 'weekly' },
+    } ) );
+    expect( result.ok ).toBe( true );
+    if ( !result.ok ) {
+      return;
+    }
+    expect( result.value.conflicts.some(
+      ( row ) =>
+        row.kind === 'exclusive-overlap' &&
+        row.source.type === 'event' &&
+        row.source.id === IDS.event,
+    ) ).toBe( true );
+  } );
 } );
 
 describe( 'checkSlot', () => {

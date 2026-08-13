@@ -29,8 +29,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
     links)
   - Check/apply for events, availability rules, slots, and
     bookings (`allowConflicts` overrides occupancy only)
-  - Queries (`queryAvailability`, `queryView`) tagged `own` /
-    `inherited` / `rolled-up`
+  - Queries: `queryAvailability` (open ad-hoc intervals) and
+    `queryView` (items tagged `own` / `inherited` / `rolled-up`)
 
 - README: install (`bun add` placeholder and local `bun link`),
   snapshot shape, inheritance modes, check-then-apply and query
@@ -48,5 +48,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Recurring `checkEvent` / `applyEvent` inspect the series bound
+  (`until`, `count`, or a one-year default horizon) instead of
+  only the prototype ±1 day
+- Interval overlap and `start < end` compare instants by epoch
+  milliseconds, not string order
+- `expandRecurrence` returns `validation` for an unknown IANA zone
+  instead of throwing
 - Rule expansion aligns `interval`/`count` to the range-start civil
   date; overnight lookbehind no longer shifts the series origin
