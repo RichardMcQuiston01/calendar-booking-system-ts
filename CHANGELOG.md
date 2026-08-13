@@ -9,6 +9,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- `expandRecurrence` for event and availability-rule occurrences
+  (civil-time daily/weekly/yearly, EXDATE, DST, overnight windows)
 - Domain types, `Result` helpers (`ok` / `err`), UUID/time utilities,
   and `validateSnapshot` for snapshot shape and integrity checks
 
