@@ -11,6 +11,8 @@ package root.
 
 ## Install
 
+The package is not published to a registry yet. When it is:
+
 ```bash
 bun add scheduling-calendar
 ```
