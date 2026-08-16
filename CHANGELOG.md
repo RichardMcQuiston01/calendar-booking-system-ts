@@ -32,9 +32,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Queries: `queryAvailability` (open ad-hoc intervals) and
     `queryView` (items tagged `own` / `inherited` / `rolled-up`)
 
-- README: install (`bun add` placeholder and local `bun link`),
-  snapshot shape, inheritance modes, check-then-apply and query
-  examples, non-goals, and development scripts
+- README: install, snapshot shape, check-then-apply and query
+  examples, and development scripts
 - README-shaped integration test that puts a teacher calendar,
   books open time, and asserts the availability hole
 - Reference PostgreSQL schema (`sql/schema.sql`) matching spec
@@ -45,6 +44,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   (`docs/superpowers/plans/2026-08-12-scheduling-calendar-engine.md`)
 - Bun TypeScript package skeleton (`package.json`, `tsconfig.json`,
   `eslint.config.js`, `.gitignore`)
+
+### Changed
+
+- README trimmed to consumer-facing install and usage. The
+  inheritance-mode tables, roll-up rules, recurrence horizon,
+  v1 non-goals, and the `feature/*` → `dev` → `main` branch
+  workflow now live only in the design spec, which already
+  covered them (§3, §5.4, §12.2)
+- Design spec documents the one-year unbounded-series horizon
+  (§6.2) that `src/conflicts.ts` implements, and records the
+  pre-publication `bun link` workflow (§12.1)
+- `.gitignore` covers `.eslintcache` and `*.tgz` pack artifacts
 
 ### Fixed
 

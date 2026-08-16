@@ -411,6 +411,7 @@ Applies to `CalendarEvent` and `AvailabilityRule` only.
 - `yearly` — every `interval` years on the same month-day as DTSTART. Invalid civil dates (29 February in a non-leap year) are **skipped**, not clamped.
 - `byDay`, when present, keeps only occurrences whose civil weekday is listed. Valid for all three freqs.
 - `until` and `count` must not both be set. If neither is set, expansion is bounded by the **query range** only (the host must always pass a range).
+- Conflict checking must bound the series itself, since no query range is supplied. `checkEvent` / `applyEvent` scan through `until` (plus one local day), or far enough to cover `count` (plus one local day). When neither bound is set they use a **one-year horizon from the prototype start**. Hosts that need a longer unbounded series set `until` or `count`.
 - `excludedDates` (`EXDATE`) are civil dates in the event/rule zone. Any occurrence whose local date is listed is dropped.
 - DST: occurrences keep civil clock time. A 09:00 weekly class stays 09:00 local on both sides of a DST transition; the UTC instant changes.
 - Event duration is `end - start` of the prototype, applied to each occurrence start in the event zone.
@@ -626,11 +627,25 @@ Use fixed `now` and fixed instants in tests. Do not depend on the machine clock 
 
 ## 12. Documentation and git
 
-- **README.md** is updated in the same change as user-facing API or behavior. It is the install and usage source of truth.
+- **README.md** is updated in the same change as user-facing API or behavior. It carries install and usage for consumers of the published package; project process, design rationale, and pre-publication workflow live in this spec.
 - **CHANGELOG.md** follows Keep a Changelog. Every commit that changes the project updates `[Unreleased]`. Use Conventional Commits: `feat`, `fix`, `docs`, `test`, `chore`. Subject ≤ 50 characters; body explains why.
 - **`.gitignore`** covers `node_modules/`, `dist/`, coverage, `.env` / `.env.*` (keep `.env.example` if added), logs, OS and editor junk, bun cache. Never commit `.env` or secrets.
 
-### 12.1 Branch model
+### 12.1 Local consumption before publication
+
+The package is not published to a registry yet. Until it is, hosts consume it from this repository with `bun link`:
+
+```bash
+# in this repository
+bun link
+
+# in the host application
+bun link scheduling-calendar
+```
+
+A local path or git URL in the host `package.json` works as well. Once the package is published, `bun add scheduling-calendar` (as shown in the README) is the only step a host needs.
+
+### 12.2 Branch model
 
 | Branch | Role |
 | --- | --- |

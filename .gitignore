@@ -6,9 +6,15 @@ dist/
 build/
 *.tsbuildinfo
 
+# Package tarballs (bun pm pack / npm pack)
+*.tgz
+
 # Test / coverage
 coverage/
 .nyc_output/
+
+# Lint cache
+.eslintcache
 
 # Environment and secrets
 .env
