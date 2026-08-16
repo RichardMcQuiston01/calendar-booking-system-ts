@@ -2,35 +2,18 @@
 
 Framework-agnostic TypeScript engine for hierarchical scheduling and booking.
 
-Each **entity** (school, term, section, course, teacher, student, or a host-defined type) can have exactly one **calendar**. Calendar parentage follows the entity tree: a teacher’s calendar is a child of their parent entity’s calendar. Child calendars can inherit busy time from ancestors, roll events up to parents, both, or neither.
+Each **entity** (school, term, section, course, teacher, student, or a host-defined type) can have exactly one **calendar**. Calendar parentage follows the entity tree: a teacher’s calendar is a child of their parent entity’s calendar. A calendar's `inheritance` mode decides how it treats that parent: inherit busy time from ancestors (`inherit-blocks`), roll its own events up to them (`roll-up`), `both`, or `none`.
 
 This package is a **pure engine**. You pass a snapshot in; you get a report or a new snapshot out. There is no UI, HTTP server, or database connection.
 
-**Status:** v0 engine. Public API is the `src/index.ts` barrel.
-
-## Spec
-
-[docs/superpowers/specs/2026-08-12-scheduling-calendar-design.md](docs/superpowers/specs/2026-08-12-scheduling-calendar-design.md)
+The public API is the `src/index.ts` barrel; import everything from the
+package root.
 
 ## Install
-
-The package is not published to a registry yet. When it is:
 
 ```bash
 bun add scheduling-calendar
 ```
-
-Until then, consume it from this repo with `bun link`:
-
-```bash
-# in this repository
-bun link
-
-# in the host application
-bun link scheduling-calendar
-```
-
-Or depend on a local path / git URL in the host `package.json`.
 
 ## Snapshot shape
 
@@ -57,33 +40,6 @@ An entity with no `entityCalendar` row is skipped (students need not
 have calendars). The host supplies every UUID; the engine does not
 generate ids.
 
-## Inheritance modes
-
-A calendar has no `parentId`. Parentage is derived from the entity
-tree: calendar → entity → `parentId` → parent’s calendar (skip a hop
-if the parent entity has no calendar).
-
-`calendar.inheritance` describes how **this** calendar treats its
-resolved parent:
-
-| Mode | Downward (this calendar) | Upward (an ancestor) |
-| --- | --- | --- |
-| `none` | Ignore parent busy | Events do not appear on the parent |
-| `inherit-blocks` | Parent effective exclusive busy is busy here | No roll-up |
-| `roll-up` | Ignore parent busy | This calendar’s events occupy the parent |
-| `both` | Both | Both |
-
-Effective exclusive busy is own exclusive occupancy plus, when the
-mode is `inherit-blocks` or `both`, the parent’s effective exclusive
-busy. A mid-node with `none` or `roll-up` stops the downward chain.
-
-Roll-up of descendant D onto ancestor A includes D’s events only when
-every hop from D up to (but not including) A is `roll-up` or `both`.
-
-Parent **slots** never become inherited blocks. Only ancestor
-**events** and **ad-hoc bookings** contribute. Seat bookings never
-inherit or roll up on their own.
-
 ## Check then apply
 
 `check*` returns `{ ok: true, value: { conflicts } }` even when
@@ -91,13 +47,6 @@ conflicts exist — “ok” means the check ran. Inspect
 `conflicts.length`. `apply*` with conflicts and
 `allowConflicts !== true` returns `{ ok: false, error: { code:
 'conflict' } }` and the same snapshot reference.
-
-Recurring `checkEvent` / `applyEvent` expand the series through
-`recurrence.until` (plus one local day), or far enough to cover
-`recurrence.count` (plus one local day). When neither bound is
-set, the engine uses a **one-year horizon from the prototype
-start**. Hosts that need a longer unbounded series should set
-`until` or `count`.
 
 ```ts
 import {
@@ -247,17 +196,6 @@ if ( view.ok ) {
 }
 ```
 
-## Non-goals (v1)
-
-- Any UI toolkit or CSS
-- A live database adapter, Prisma client, or repository
-- HTTP/API layer
-- Multi-resource booking (teacher + room in one transaction)
-- Recurring bookings
-- “This and future” series edits
-- Auth, permissions, notifications, payments
-- Generated ids (the host supplies UUIDs)
-
 ## Development
 
 Use **bun**, not npm.
@@ -273,9 +211,6 @@ bun run build       # emit dist/
 Reference PostgreSQL DDL matching the TypeScript model lives in
 [`sql/schema.sql`](sql/schema.sql). The engine never executes SQL;
 hosts apply the schema (or an equivalent) themselves.
-
-Work on `feature/*` branches from `dev`. Merge each completed stage
-into `dev`. Merge `dev` into `main` when v1 is complete and tested.
 
 ## License
 
