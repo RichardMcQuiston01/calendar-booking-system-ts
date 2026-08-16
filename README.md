@@ -8,10 +8,6 @@ This package is a **pure engine**. You pass a snapshot in; you get a report or a
 
 **Status:** v0 engine. Public API is the `src/index.ts` barrel.
 
-## Spec
-
-[docs/superpowers/specs/2026-08-12-scheduling-calendar-design.md](docs/superpowers/specs/2026-08-12-scheduling-calendar-design.md)
-
 ## Install
 
 The package is not published to a registry yet. When it is:
