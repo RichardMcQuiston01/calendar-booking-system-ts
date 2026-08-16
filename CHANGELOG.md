@@ -44,6 +44,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   (`docs/superpowers/plans/2026-08-12-scheduling-calendar-engine.md`)
 - Bun TypeScript package skeleton (`package.json`, `tsconfig.json`,
   `eslint.config.js`, `.gitignore`)
+- README “Buy Me a Coffee” section: Stripe donate link and a
+  scannable QR code (`donate.svg`), matching the other
+  repositories
 
 ### Changed
 
