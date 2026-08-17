@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- CI workflow (`.github/workflows/ci.yml`): typecheck, lint, tests, and
+  a build on every pull request and on pushes to `main`, `dev`, and
+  `staging`. `publish.yml` only ran on release, so pull requests had no
+  automated signal
+
 ## [0.1.0] - 2026-08-17
 
 ### Added
