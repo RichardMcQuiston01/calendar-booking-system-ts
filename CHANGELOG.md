@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- Donate block now uses the standard wording and sits last in the
+  README, after License. The previous copy predated the standard and
+  had drifted from the other repositories
+
 ### Added
 
 - CI workflow (`.github/workflows/ci.yml`): typecheck, lint, tests, and
