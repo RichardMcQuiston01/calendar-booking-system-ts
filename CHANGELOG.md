@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.0] - 2026-08-17
+
 ### Added
 
 - v0 scheduling calendar engine: hosts pass an immutable
@@ -52,6 +54,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   2026 Richard McQuiston), `"license": "Apache-2.0"` in
   `package.json`, and a matching README section replacing
   “UNLICENSED until a license is chosen”
+
+- `prepublishOnly` script so `npm publish` always builds `dist/`
+  first, rather than shipping whatever happens to be on disk
+- GitHub Actions publish workflow (`.github/workflows/publish.yml`):
+  runs typecheck, lint, and tests, verifies the release tag matches
+  `package.json`, then publishes to npm on a published release or
+  manual dispatch
+
+- Package published as `@richardmcquiston01/calendar-booking-system`
+  with `publishConfig.access` set to `public`, since scoped packages
+  default to restricted
+- `author` field
 
 ### Changed
 
