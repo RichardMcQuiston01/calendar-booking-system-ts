@@ -2,6 +2,7 @@
   "name": "scheduling-calendar",
   "version": "0.0.0",
   "description": "Framework-agnostic TypeScript engine for hierarchical scheduling and booking",
+  "license": "Apache-2.0",
   "type": "module",
   "exports": {
     ".": {

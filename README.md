@@ -224,4 +224,4 @@ I developed this while I am currently looking for work. If this app has helped y
 
 ## License
 
-UNLICENSED until a license is chosen.
+Apache 2.0 — see [`LICENSE`](LICENSE).
