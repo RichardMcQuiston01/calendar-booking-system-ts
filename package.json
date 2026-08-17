@@ -1,7 +1,8 @@
 {
-  "name": "scheduling-calendar",
+  "name": "@richardmcquiston01/calendar-booking-system",
   "version": "0.1.0",
   "description": "Framework-agnostic TypeScript engine for hierarchical scheduling and booking",
+  "author": "Richard McQuiston <richard.mcquiston01@gmail.com>",
   "license": "Apache-2.0",
   "type": "module",
   "repository": {
@@ -13,6 +14,9 @@
       "types": "./dist/index.d.ts",
       "import": "./dist/index.js"
     }
+  },
+  "publishConfig": {
+    "access": "public"
   },
   "files": ["dist", "sql/schema.sql"],
   "scripts": {

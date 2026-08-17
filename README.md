@@ -1,4 +1,4 @@
-# scheduling-calendar
+# @richardmcquiston01/calendar-booking-system
 
 Framework-agnostic TypeScript engine for hierarchical scheduling and booking.
 
@@ -14,7 +14,7 @@ package root.
 The package is not published to a registry yet. When it is:
 
 ```bash
-bun add scheduling-calendar
+bun add @richardmcquiston01/calendar-booking-system
 ```
 
 ## Snapshot shape
@@ -58,7 +58,7 @@ import {
   putCalendar,
   putEntity,
   putEntityCalendar,
-} from 'scheduling-calendar';
+} from '@richardmcquiston01/calendar-booking-system';
 
 const now = '2026-08-12T12:00:00.000Z';
 const teacherId = '55555555-5555-4555-8555-555555555555';
@@ -176,7 +176,7 @@ the snapshot. `queryAvailability` and `queryView` return
 import {
   queryAvailability,
   queryView,
-} from 'scheduling-calendar';
+} from '@richardmcquiston01/calendar-booking-system';
 
 const range = {
   start: '2026-09-08T12:00:00.000Z',

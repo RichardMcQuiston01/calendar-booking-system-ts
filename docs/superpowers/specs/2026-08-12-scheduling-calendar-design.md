@@ -2,7 +2,7 @@
 
 Date: 2026-08-12  
 Status: Approved for implementation planning  
-Package: `scheduling-calendar`
+Package: `@richardmcquiston01/calendar-booking-system`
 
 ## 1. Purpose
 
@@ -601,7 +601,7 @@ scheduling-calendar/
   docs/superpowers/specs/2026-08-12-scheduling-calendar-design.md
 ```
 
-- Package name: `scheduling-calendar`.
+- Package name: `@richardmcquiston01/calendar-booking-system`.
 - `"type": "module"`.
 - TypeScript `strict`.
 - Toolchain is **bun** (`bun run typecheck`, `bun run test`, `bun run lint`). Do not use npm unless the user says so.
@@ -640,10 +640,10 @@ The package is not published to a registry yet. Until it is, hosts consume it fr
 bun link
 
 # in the host application
-bun link scheduling-calendar
+bun link @richardmcquiston01/calendar-booking-system
 ```
 
-A local path or git URL in the host `package.json` works as well. Once the package is published, `bun add scheduling-calendar` (as shown in the README) is the only step a host needs.
+A local path or git URL in the host `package.json` works as well. Once the package is published, `bun add @richardmcquiston01/calendar-booking-system` (as shown in the README) is the only step a host needs.
 
 ### 12.2 Branch model
 
@@ -680,7 +680,7 @@ import {
   applyBooking,
   queryAvailability,
   type CalendarSnapshot,
-} from 'scheduling-calendar';
+} from '@richardmcquiston01/calendar-booking-system';
 
 const snapshot: CalendarSnapshot = { /* rows loaded by the host */ };
 

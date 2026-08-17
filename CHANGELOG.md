@@ -62,6 +62,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `package.json`, then publishes to npm on a published release or
   manual dispatch
 
+- Package published as `@richardmcquiston01/calendar-booking-system`
+  with `publishConfig.access` set to `public`, since scoped packages
+  default to restricted
+- `author` field
+
 ### Changed
 
 - README trimmed to consumer-facing install and usage. The
