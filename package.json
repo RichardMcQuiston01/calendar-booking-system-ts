@@ -1,9 +1,13 @@
 {
   "name": "scheduling-calendar",
-  "version": "0.0.0",
+  "version": "0.1.0",
   "description": "Framework-agnostic TypeScript engine for hierarchical scheduling and booking",
   "license": "Apache-2.0",
   "type": "module",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/RichardMcQuiston01/calendar-booking-system-ts.git"
+  },
   "exports": {
     ".": {
       "types": "./dist/index.d.ts",
