@@ -48,6 +48,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   scannable QR code (`donate.svg`), matching the other
   repositories
 
+- Apache 2.0 license: `LICENSE` (canonical Apache text, copyright
+  2026 Richard McQuiston), `"license": "Apache-2.0"` in
+  `package.json`, and a matching README section replacing
+  “UNLICENSED until a license is chosen”
+
 ### Changed
 
 - README trimmed to consumer-facing install and usage. The
