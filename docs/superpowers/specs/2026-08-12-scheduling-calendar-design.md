@@ -591,7 +591,7 @@ Each file has one job. Tests sit beside the source (`foo.ts` + `foo.test.ts`).
 ## 10. Package layout
 
 ```
-scheduling-calendar/
+calendar-booking-system-ts/
   package.json          bun scripts: typecheck, test, lint
   tsconfig.json
   README.md
