@@ -55,6 +55,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `package.json`, and a matching README section replacing
   “UNLICENSED until a license is chosen”
 
+- `prepublishOnly` script so `npm publish` always builds `dist/`
+  first, rather than shipping whatever happens to be on disk
+- GitHub Actions publish workflow (`.github/workflows/publish.yml`):
+  runs typecheck, lint, and tests, verifies the release tag matches
+  `package.json`, then publishes to npm on a published release or
+  manual dispatch
+
 ### Changed
 
 - README trimmed to consumer-facing install and usage. The
