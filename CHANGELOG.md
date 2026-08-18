@@ -12,6 +12,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Donate block now uses the standard wording and sits last in the
   README, after License. The previous copy predated the standard and
   had drifted from the other repositories
+- README's Install section no longer says the package is unpublished
+  — it has been on npm since `0.1.0`. Spec §12.1 updated to match and
+  retitled from "before publication" now that it has happened
 
 ### Added
 
