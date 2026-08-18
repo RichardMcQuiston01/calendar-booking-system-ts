@@ -631,9 +631,11 @@ Use fixed `now` and fixed instants in tests. Do not depend on the machine clock 
 - **CHANGELOG.md** follows Keep a Changelog. Every commit that changes the project updates `[Unreleased]`. Use Conventional Commits: `feat`, `fix`, `docs`, `test`, `chore`. Subject ≤ 50 characters; body explains why.
 - **`.gitignore`** covers `node_modules/`, `dist/`, coverage, `.env` / `.env.*` (keep `.env.example` if added), logs, OS and editor junk, bun cache. Never commit `.env` or secrets.
 
-### 12.1 Local consumption before publication
+### 12.1 Local consumption
 
-The package is not published to a registry yet. Until it is, hosts consume it from this repository with `bun link`:
+The package is published (`bun add @richardmcquiston01/calendar-booking-system`, as shown in the README) — that is the only step most hosts need.
+
+To consume an unreleased local change instead, use `bun link`:
 
 ```bash
 # in this repository
@@ -643,7 +645,7 @@ bun link
 bun link @richardmcquiston01/calendar-booking-system
 ```
 
-A local path or git URL in the host `package.json` works as well. Once the package is published, `bun add @richardmcquiston01/calendar-booking-system` (as shown in the README) is the only step a host needs.
+A local path or git URL in the host `package.json` works as well.
 
 ### 12.2 Branch model
 
