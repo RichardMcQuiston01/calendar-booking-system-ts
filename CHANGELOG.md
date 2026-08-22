@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- README "Getting Started" section: real Prerequisites (Node 18+/Bun,
+  ESM-only, TypeScript `moduleResolution`), an `npm install` /
+  `bun add` Installation block, and a Usage quickstart that puts an
+  entity and calendar, declares working hours, and queries open
+  time — verified to run against a fresh build before being written
+  down
+
 ### Changed
 
 - Donate block now uses the standard wording and sits last in the

@@ -9,11 +9,101 @@ This package is a **pure engine**. You pass a snapshot in; you get a report or a
 The public API is the `src/index.ts` barrel; import everything from the
 package root.
 
-## Install
+## Getting Started
+
+### Prerequisites
+
+- Node.js 18+ or Bun — anything that runs ES2022 with ES modules
+- The package is ESM-only (`"type": "module"`, no CommonJS build). A CommonJS
+  host needs a dynamic `import()`
+- TypeScript consumers need `moduleResolution` set to `Node16`, `NodeNext`, or
+  `Bundler` in `tsconfig.json` so the package's `exports` map resolves
+
+### Installation
 
 ```bash
-bun add @richardmcquiston01/calendar-booking-system
+npm install @richardmcquiston01/calendar-booking-system
 ```
+
+Works the same with `bun add`, `pnpm add`, or `yarn add`.
+
+### Usage
+
+Put an entity and a calendar, link them, declare working hours, then query
+open time:
+
+```ts
+import {
+  putEntity,
+  putCalendar,
+  putEntityCalendar,
+  applyAvailabilityRule,
+  queryAvailability,
+} from '@richardmcquiston01/calendar-booking-system';
+
+const now = '2026-08-12T12:00:00.000Z';
+const teacherId = '55555555-5555-4555-8555-555555555555';
+const teacherCalendarId = 'eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee';
+
+let snapshot = {
+  entities: [],
+  calendars: [],
+  entityCalendars: [],
+  events: [],
+  availabilityRules: [],
+  slots: [],
+  bookings: [],
+};
+
+const teacher = putEntity( snapshot, {
+  id: teacherId,
+  entityType: 'teacher',
+  name: 'Ada',
+}, { now } );
+if ( !teacher.ok ) throw new Error( teacher.error.message );
+snapshot = teacher.value.snapshot;
+
+const calendar = putCalendar( snapshot, {
+  id: teacherCalendarId,
+  timeZone: 'America/New_York',
+  inheritance: 'none',
+}, { now } );
+if ( !calendar.ok ) throw new Error( calendar.error.message );
+snapshot = calendar.value.snapshot;
+
+const link = putEntityCalendar( snapshot, {
+  id: '05050505-0505-4505-8505-050505050505',
+  entityId: teacherId,
+  calendarId: teacherCalendarId,
+}, { now } );
+if ( !link.ok ) throw new Error( link.error.message );
+snapshot = link.value.snapshot;
+
+const rule = applyAvailabilityRule( snapshot, {
+  id: '88888888-8888-4888-8888-888888888888',
+  calendarId: teacherCalendarId,
+  startTime: '08:00',
+  endTime: '15:00',
+  recurrence: {
+    freq: 'weekly',
+    byDay: [ 'MO', 'TU', 'WE', 'TH', 'FR' ],
+  },
+}, { now } );
+if ( !rule.ok ) throw new Error( rule.error.message );
+snapshot = rule.value.snapshot;
+
+const availability = queryAvailability( snapshot, teacherCalendarId, {
+  start: '2026-09-08T12:00:00.000Z',
+  end: '2026-09-08T19:00:00.000Z',
+} );
+if ( availability.ok ) {
+  // availability.value.intervals — open ad-hoc windows in UTC
+}
+```
+
+Booking time against that open window, and querying a calendar's inherited
+and rolled-up items, are covered in [Check then apply](#check-then-apply) and
+[Query example](#query-example) below.
 
 ## Snapshot shape
 
