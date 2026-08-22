@@ -17,7 +17,20 @@ package root.
 - The package is ESM-only (`"type": "module"`, no CommonJS build). A CommonJS
   host needs a dynamic `import()`
 - TypeScript consumers need `moduleResolution` set to `Node16`, `NodeNext`, or
-  `Bundler` in `tsconfig.json` so the package's `exports` map resolves
+  `Bundler` in `tsconfig.json` so the package's `exports` map resolves — paired
+  with a matching `module`: `Node16` with `Node16`, `NodeNext` with `NodeNext`,
+  or `ESNext`/`Preserve` with `Bundler`. TypeScript rejects `CommonJS` with any
+  of the three:
+
+  ```jsonc
+  // tsconfig.json
+  {
+    "compilerOptions": {
+      "module": "NodeNext",
+      "moduleResolution": "NodeNext"
+    }
+  }
+  ```
 
 ### Installation
 

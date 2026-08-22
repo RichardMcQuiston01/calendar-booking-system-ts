@@ -10,11 +10,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 
 - README "Getting Started" section: real Prerequisites (Node 18+/Bun,
-  ESM-only, TypeScript `moduleResolution`), copyable Installation
-  commands for npm/bun/pnpm/yarn, and a Usage quickstart that puts an
-  entity and calendar, declares working hours, and queries open
-  time — verified to run against a fresh build before being written
-  down
+  ESM-only, matched `module`/`moduleResolution` with a minimal
+  `tsconfig.json`), copyable Installation commands for
+  npm/bun/pnpm/yarn, and a Usage quickstart that puts an entity and
+  calendar, declares working hours, and queries open time — verified
+  to run against a fresh build before being written down
 
 ### Fixed
 
