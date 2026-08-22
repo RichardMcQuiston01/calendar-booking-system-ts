@@ -25,7 +25,17 @@ package root.
 npm install @richardmcquiston01/calendar-booking-system
 ```
 
-Works the same with `bun add`, `pnpm add`, or `yarn add`.
+```bash
+bun add @richardmcquiston01/calendar-booking-system
+```
+
+```bash
+pnpm add @richardmcquiston01/calendar-booking-system
+```
+
+```bash
+yarn add @richardmcquiston01/calendar-booking-system
+```
 
 ### Usage
 
@@ -33,6 +43,7 @@ Put an entity and a calendar, link them, declare working hours, then query
 open time:
 
 ```ts
+import type { CalendarSnapshot } from '@richardmcquiston01/calendar-booking-system';
 import {
   putEntity,
   putCalendar,
@@ -45,7 +56,7 @@ const now = '2026-08-12T12:00:00.000Z';
 const teacherId = '55555555-5555-4555-8555-555555555555';
 const teacherCalendarId = 'eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee';
 
-let snapshot = {
+let snapshot: CalendarSnapshot = {
   entities: [],
   calendars: [],
   entityCalendars: [],
@@ -139,6 +150,7 @@ conflicts exist — “ok” means the check ran. Inspect
 'conflict' } }` and the same snapshot reference.
 
 ```ts
+import type { CalendarSnapshot } from '@richardmcquiston01/calendar-booking-system';
 import {
   applyAvailabilityRule,
   applyBooking,
@@ -154,7 +166,7 @@ const studentId = '66666666-6666-4666-8666-666666666666';
 const teacherCalendarId = 'eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee';
 const bookingId = 'abababab-abab-4bab-8bab-abababababab';
 
-let snapshot = {
+let snapshot: CalendarSnapshot = {
   entities: [],
   calendars: [],
   entityCalendars: [],
