@@ -7,6 +7,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- README "Getting Started" section: real Prerequisites (Node 18+/Bun,
+  ESM-only, matched `module`/`moduleResolution` with a minimal
+  `tsconfig.json`), copyable Installation commands for
+  npm/bun/pnpm/yarn, and a Usage quickstart that puts an entity and
+  calendar, declares working hours, and queries open time — verified
+  to run against a fresh build before being written down
+
+### Fixed
+
+- The README's TypeScript examples (Usage and Check then apply) typed
+  their `let snapshot = { ...all empty arrays }` initializer implicitly.
+  Under `strict`, TypeScript infers `never[]` for each empty array with
+  no annotation, so the very next reassignment
+  (`snapshot = teacher.value.snapshot`) failed to compile. Both now
+  import and annotate with `CalendarSnapshot`. Caught by actually
+  running `tsc --strict` against the examples in a scratch ESM
+  project, not just executing them with Bun (which strips types
+  without checking them)
+
 ### Changed
 
 - Donate block now uses the standard wording and sits last in the

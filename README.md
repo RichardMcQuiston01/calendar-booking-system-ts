@@ -9,11 +9,125 @@ This package is a **pure engine**. You pass a snapshot in; you get a report or a
 The public API is the `src/index.ts` barrel; import everything from the
 package root.
 
-## Install
+## Getting Started
+
+### Prerequisites
+
+- Node.js 18+ or Bun — anything that runs ES2022 with ES modules
+- The package is ESM-only (`"type": "module"`, no CommonJS build). A CommonJS
+  host needs a dynamic `import()`
+- TypeScript consumers need `moduleResolution` set to `Node16`, `NodeNext`, or
+  `Bundler` in `tsconfig.json` so the package's `exports` map resolves — paired
+  with a matching `module`: `Node16` with `Node16`, `NodeNext` with `NodeNext`,
+  or `ESNext`/`Preserve` with `Bundler`. TypeScript rejects `CommonJS` with any
+  of the three:
+
+  ```jsonc
+  // tsconfig.json
+  {
+    "compilerOptions": {
+      "module": "NodeNext",
+      "moduleResolution": "NodeNext"
+    }
+  }
+  ```
+
+### Installation
+
+```bash
+npm install @richardmcquiston01/calendar-booking-system
+```
 
 ```bash
 bun add @richardmcquiston01/calendar-booking-system
 ```
+
+```bash
+pnpm add @richardmcquiston01/calendar-booking-system
+```
+
+```bash
+yarn add @richardmcquiston01/calendar-booking-system
+```
+
+### Usage
+
+Put an entity and a calendar, link them, declare working hours, then query
+open time:
+
+```ts
+import type { CalendarSnapshot } from '@richardmcquiston01/calendar-booking-system';
+import {
+  putEntity,
+  putCalendar,
+  putEntityCalendar,
+  applyAvailabilityRule,
+  queryAvailability,
+} from '@richardmcquiston01/calendar-booking-system';
+
+const now = '2026-08-12T12:00:00.000Z';
+const teacherId = '55555555-5555-4555-8555-555555555555';
+const teacherCalendarId = 'eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee';
+
+let snapshot: CalendarSnapshot = {
+  entities: [],
+  calendars: [],
+  entityCalendars: [],
+  events: [],
+  availabilityRules: [],
+  slots: [],
+  bookings: [],
+};
+
+const teacher = putEntity( snapshot, {
+  id: teacherId,
+  entityType: 'teacher',
+  name: 'Ada',
+}, { now } );
+if ( !teacher.ok ) throw new Error( teacher.error.message );
+snapshot = teacher.value.snapshot;
+
+const calendar = putCalendar( snapshot, {
+  id: teacherCalendarId,
+  timeZone: 'America/New_York',
+  inheritance: 'none',
+}, { now } );
+if ( !calendar.ok ) throw new Error( calendar.error.message );
+snapshot = calendar.value.snapshot;
+
+const link = putEntityCalendar( snapshot, {
+  id: '05050505-0505-4505-8505-050505050505',
+  entityId: teacherId,
+  calendarId: teacherCalendarId,
+}, { now } );
+if ( !link.ok ) throw new Error( link.error.message );
+snapshot = link.value.snapshot;
+
+const rule = applyAvailabilityRule( snapshot, {
+  id: '88888888-8888-4888-8888-888888888888',
+  calendarId: teacherCalendarId,
+  startTime: '08:00',
+  endTime: '15:00',
+  recurrence: {
+    freq: 'weekly',
+    byDay: [ 'MO', 'TU', 'WE', 'TH', 'FR' ],
+  },
+}, { now } );
+if ( !rule.ok ) throw new Error( rule.error.message );
+snapshot = rule.value.snapshot;
+
+const availability = queryAvailability( snapshot, teacherCalendarId, {
+  start: '2026-09-08T12:00:00.000Z',
+  end: '2026-09-08T19:00:00.000Z',
+} );
+if ( availability.ok ) {
+  // availability.value.intervals — open ad-hoc windows in UTC
+}
+```
+
+Booking time against that open window, and querying a calendar's inherited
+and rolled-up items, are covered in [Check then apply](#check-then-apply) and
+[Query example](#query-example) below.
 
 ## Snapshot shape
 
@@ -49,6 +163,7 @@ conflicts exist — “ok” means the check ran. Inspect
 'conflict' } }` and the same snapshot reference.
 
 ```ts
+import type { CalendarSnapshot } from '@richardmcquiston01/calendar-booking-system';
 import {
   applyAvailabilityRule,
   applyBooking,
@@ -64,7 +179,7 @@ const studentId = '66666666-6666-4666-8666-666666666666';
 const teacherCalendarId = 'eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee';
 const bookingId = 'abababab-abab-4bab-8bab-abababababab';
 
-let snapshot = {
+let snapshot: CalendarSnapshot = {
   entities: [],
   calendars: [],
   entityCalendars: [],
