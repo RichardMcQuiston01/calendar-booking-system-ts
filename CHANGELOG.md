@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.1] - 2026-08-23
+
 ### Added
 
 - README "Getting Started" section: real Prerequisites (Node 18+/Bun,
@@ -15,6 +17,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   npm/bun/pnpm/yarn, and a Usage quickstart that puts an entity and
   calendar, declares working hours, and queries open time — verified
   to run against a fresh build before being written down
+- CI workflow (`.github/workflows/ci.yml`): typecheck, lint, tests, and
+  a build on every pull request and on pushes to `main`, `dev`, and
+  `staging`. `publish.yml` only ran on release, so pull requests had no
+  automated signal
+
+### Changed
+
+- Donate block now uses the standard wording and sits last in the
+  README, after License. The previous copy predated the standard and
+  had drifted from the other repositories
+- README's Install section no longer says the package is unpublished
+  — it has been on npm since `0.1.0`. Spec §12.1 updated to match and
+  retitled from "before publication" now that it has happened
 
 ### Fixed
 
@@ -27,22 +42,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   running `tsc --strict` against the examples in a scratch ESM
   project, not just executing them with Bun (which strips types
   without checking them)
-
-### Changed
-
-- Donate block now uses the standard wording and sits last in the
-  README, after License. The previous copy predated the standard and
-  had drifted from the other repositories
-- README's Install section no longer says the package is unpublished
-  — it has been on npm since `0.1.0`. Spec §12.1 updated to match and
-  retitled from "before publication" now that it has happened
-
-### Added
-
-- CI workflow (`.github/workflows/ci.yml`): typecheck, lint, tests, and
-  a build on every pull request and on pushes to `main`, `dev`, and
-  `staging`. `publish.yml` only ran on release, so pull requests had no
-  automated signal
 
 ## [0.1.0] - 2026-08-17
 
