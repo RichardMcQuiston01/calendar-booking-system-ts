@@ -104,7 +104,10 @@ function* iterateCivilDates(
     return;
   }
   if ( freq === 'weekly' ) {
-    const days = byDay && byDay.length > 0 ? byDay : [ weekdayOf( dtStart ) ];
+    const days =
+      byDay && byDay.length > 0
+        ? [ ...new Set( byDay ) ]
+        : [ weekdayOf( dtStart ) ];
     let weekStart = mondayOf( dtStart );
     while ( weekStart <= stopDate ) {
       const inWeek: DateOnly[] = [];
