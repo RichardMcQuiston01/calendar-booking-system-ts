@@ -154,6 +154,7 @@ create table availability_rule (
   calendar_id     uuid not null references calendar (id) on delete cascade,
   start_time      time not null,
   end_time        time not null,
+  start_date      date,
   recurrence      jsonb not null,
   excluded_dates  date[],
   created_at      timestamptz not null default now(),
@@ -352,6 +353,7 @@ interface AvailabilityRule {
   calendarId: Uuid;
   startTime: ClockTime;
   endTime: ClockTime;
+  startDate?: DateOnly; // required when interval > 1 or count is set
   recurrence: RecurrenceRule;
   excludedDates?: DateOnly[];
   createdAt: Instant;
@@ -406,7 +408,7 @@ SQL `start_at` / `end_at` map to TypeScript `start` / `end`.
 
 Applies to `CalendarEvent` and `AvailabilityRule` only.
 
-- `daily` — every `interval` days from the DTSTART civil date in the rule zone.
+- `daily` — every `interval` days from the DTSTART civil date in the rule zone. An `AvailabilityRule` has no start instant, so its DTSTART is the optional `startDate` civil date. `startDate` is **required** when `interval > 1` or `count` is set (a stride or count anchored to the query window would give different open days for overlapping queries); without it, expansion starts at the query range.
 - `weekly` — every `interval` weeks. If `byDay` is omitted, the weekday of DTSTART in that zone is used.
 - `yearly` — every `interval` years on the same month-day as DTSTART. Invalid civil dates (29 February in a non-leap year) are **skipped**, not clamped.
 - `byDay`, when present, keeps only occurrences whose civil weekday is listed. Valid for all three freqs.

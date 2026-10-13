@@ -329,9 +329,9 @@ describe( 'expandRecurrence', () => {
     } );
   } );
 
-  test( 'rule daily interval 2 aligns to the range-start civil date', () => {
+  test( 'rule daily interval 2 aligns to its startDate', () => {
     const result = expandRecurrence(
-      rule( { freq: 'daily', interval: 2 } ),
+      rule( { freq: 'daily', interval: 2 }, { startDate: '2026-09-08' } ),
       civilRange( '2026-09-08', '2026-09-13' ),
       TZ,
     );
@@ -354,9 +354,9 @@ describe( 'expandRecurrence', () => {
     } );
   } );
 
-  test( 'rule daily count 2 starts at the range-start civil date', () => {
+  test( 'rule daily count 2 counts from its startDate', () => {
     const result = expandRecurrence(
-      rule( { freq: 'daily', count: 2 } ),
+      rule( { freq: 'daily', count: 2 }, { startDate: '2026-09-08' } ),
       civilRange( '2026-09-08', '2026-09-20' ),
       TZ,
     );
@@ -375,9 +375,12 @@ describe( 'expandRecurrence', () => {
     } );
   } );
 
-  test( 'rule weekly interval 2 aligns weeks to the range-start Monday', () => {
+  test( 'rule weekly interval 2 aligns weeks to its startDate', () => {
     const result = expandRecurrence(
-      rule( { freq: 'weekly', interval: 2, byDay: [ 'MO' ] } ),
+      rule(
+        { freq: 'weekly', interval: 2, byDay: [ 'MO' ] },
+        { startDate: '2026-09-14' },
+      ),
       civilRange( '2026-09-14', '2026-10-12' ),
       TZ,
     );
@@ -394,6 +397,44 @@ describe( 'expandRecurrence', () => {
         },
       ],
     } );
+  } );
+
+  test( 'rule interval 2 open days do not depend on the query window', () => {
+    const anchored = rule(
+      { freq: 'daily', interval: 2 },
+      { startDate: '2026-09-08' },
+    );
+    const starts = ( from: string ): string[] => {
+      const result = expandRecurrence(
+        anchored,
+        civilRange( from, '2026-09-13' ),
+        TZ,
+      );
+      expect( result.ok ).toBe( true );
+      return result.ok ? result.value.map( ( occ ) => occ.start ) : [];
+    };
+    const wide = starts( '2026-09-08' );
+    expect( wide ).toEqual( [
+      '2026-09-08T13:00:00.000Z',
+      '2026-09-10T13:00:00.000Z',
+      '2026-09-12T13:00:00.000Z',
+    ] );
+    expect( starts( '2026-09-09' ) ).toEqual( wide.slice( 1 ) );
+  } );
+
+  test( 'rule interval > 1 or count without startDate is rejected', () => {
+    for ( const recurrence of [
+      { freq: 'daily', interval: 2 },
+      { freq: 'daily', count: 2 },
+    ] as RecurrenceRule[] ) {
+      expect(
+        expandRecurrence(
+          rule( recurrence ),
+          civilRange( '2026-09-08', '2026-09-13' ),
+          TZ,
+        ),
+      ).toMatchObject( { ok: false, error: { code: 'validation' } } );
+    }
   } );
 
   test( 'unknown IANA zone returns validation', () => {

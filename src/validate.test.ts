@@ -195,6 +195,27 @@ describe( 'validateSnapshot', () => {
     } );
   } );
 
+  test( 'rejects a rule with interval 2 and no startDate', () => {
+    const snapshot = schoolTreeSnapshot();
+    snapshot.availabilityRules.push( {
+      id: IDS.rule,
+      calendarId: IDS.teacherCal,
+      startTime: '09:00',
+      endTime: '10:00',
+      recurrence: { freq: 'daily', interval: 2 },
+      createdAt: NOW,
+      updatedAt: NOW,
+    } );
+    expect( validateSnapshot( snapshot ) ).toMatchObject( {
+      ok: false,
+      error: { code: 'validation' },
+    } );
+    snapshot.availabilityRules[ 0 ].startDate = '2026-09-08';
+    expect( validateSnapshot( snapshot ).ok ).toBe( true );
+    snapshot.availabilityRules[ 0 ].startDate = '2026-02-30';
+    expect( validateSnapshot( snapshot ).ok ).toBe( false );
+  } );
+
   test( 'rejects an empty entityType', () => {
     const snapshot = schoolTreeSnapshot();
     snapshot.entities[ 0 ].entityType = '';

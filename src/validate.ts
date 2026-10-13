@@ -2,6 +2,7 @@ import { isUuid, normalizeUuid } from './ids.js';
 import {
   MAX_RECURRENCE_COUNT,
   MAX_RECURRENCE_INTERVAL,
+  ruleNeedsStartDate,
 } from './recurrence.js';
 import { err, ok } from './result.js';
 import {
@@ -348,6 +349,22 @@ function validateRule( rule: AvailabilityRule ): Result<true> {
   const recurrence = recurrenceMessage( rule.recurrence, true );
   if ( recurrence ) {
     return fail( 'validation', recurrence, { id: rule.id } );
+  }
+  if (
+    rule.startDate !== undefined &&
+    !isValidDateOnly( rule.startDate )
+  ) {
+    return fail( 'validation', 'startDate is not a DateOnly', {
+      id: rule.id,
+    } );
+  }
+  if ( rule.startDate === undefined && ruleNeedsStartDate( rule ) ) {
+    return fail(
+      'validation',
+      'availability rule needs startDate when recurrence.interval ' +
+        'is greater than 1 or recurrence.count is set',
+      { id: rule.id },
+    );
   }
   const excluded = excludedDatesMessage( rule.excludedDates );
   if ( excluded ) {
