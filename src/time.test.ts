@@ -1,9 +1,11 @@
 import { expect, test } from 'bun:test';
 import {
   civilDateInZone,
+  isCanonicalInstant,
   isValidClockTime,
   isValidTimeZone,
   overlaps,
+  rangeProblem,
   weekdayInZone,
   zonedInstant,
 } from './time.ts';
@@ -68,4 +70,40 @@ test( 'civil date and weekday follow the zone', () => {
 test( 'zonedInstant builds a UTC instant from civil parts', () => {
   expect( zonedInstant( '2026-09-08', '09:00', 'America/New_York' ) )
     .toBe( '2026-09-08T13:00:00.000Z' );
+} );
+
+test( 'isCanonicalInstant accepts only YYYY-MM-DDTHH:mm:ss.sssZ', () => {
+  expect( isCanonicalInstant( '2026-09-08T12:00:00.000Z' ) ).toBe( true );
+  for ( const bad of [
+    '2026-09-08T12:00:00Z',
+    '2026-09-08T12:00:00.000+00:00',
+    '2026-09-08T08:00:00.000-04:00',
+    '2026-09-08T09:00:00',
+    '2026-09-08',
+    '2026-02-30T12:00:00.000Z',
+    'nope',
+  ] ) {
+    expect( isCanonicalInstant( bad ) ).toBe( false );
+  }
+} );
+
+test( 'rangeProblem rejects non-canonical and inverted ranges', () => {
+  expect(
+    rangeProblem( {
+      start: '2026-09-08T00:00:00.000Z',
+      end: '2026-09-09T00:00:00.000Z',
+    } ),
+  ).toBeUndefined();
+  expect(
+    rangeProblem( {
+      start: '2026-06-01T12:00:00-04:00',
+      end: '2026-06-01T15:00:00.000Z',
+    } ),
+  ).toContain( 'canonical' );
+  expect(
+    rangeProblem( {
+      start: '2026-09-09T00:00:00.000Z',
+      end: '2026-09-08T00:00:00.000Z',
+    } ),
+  ).toContain( 'before' );
 } );

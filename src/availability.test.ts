@@ -203,3 +203,41 @@ describe( 'openAvailability', () => {
       } );
   } );
 } );
+
+describe( 'non-canonical instants', () => {
+  test( 'range with an offset returns a range error', () => {
+    const result = openAvailability(
+      { ...schoolTreeSnapshot(), availabilityRules: [ weekdayRule() ] },
+      IDS.teacherCal,
+      {
+        start: '2026-09-08T08:00:00-04:00',
+        end: '2026-09-09T00:00:00.000Z',
+      },
+    );
+    expect( result.ok ).toBe( false );
+    if ( !result.ok ) {
+      expect( result.error.code ).toBe( 'range' );
+    }
+  } );
+
+  test( 'event with an offset is rejected rather than ignored', () => {
+    const result = openAvailability(
+      {
+        ...schoolTreeSnapshot(),
+        availabilityRules: [ weekdayRule() ],
+        events: [
+          eventOn( IDS.teacherCal, {
+            start: '2026-09-08T08:30:00.000-04:00',
+            end: '2026-09-08T09:30:00.000-04:00',
+          } ),
+        ],
+      },
+      IDS.teacherCal,
+      RANGE,
+    );
+    expect( result.ok ).toBe( false );
+    if ( !result.ok ) {
+      expect( result.error.code ).toBe( 'validation' );
+    }
+  } );
+} );

@@ -445,3 +445,25 @@ describe( 'expandRecurrence', () => {
     } );
   } );
 } );
+
+test( 'until compares epoch time, not strings', () => {
+  const result = expandRecurrence(
+    event(
+      { freq: 'daily', until: '2026-09-10T13:00:00.000Z' },
+      {
+        start: '2026-09-08T13:00:00.000Z',
+        end: '2026-09-08T14:00:00.000Z',
+      },
+    ),
+    civilRange( '2026-09-08', '2026-09-12' ),
+    TZ,
+  );
+  expect( result.ok ).toBe( true );
+  if ( result.ok ) {
+    expect( result.value.map( ( occ ) => occ.start ) ).toEqual( [
+      '2026-09-08T13:00:00.000Z',
+      '2026-09-09T13:00:00.000Z',
+      '2026-09-10T13:00:00.000Z',
+    ] );
+  }
+} );
