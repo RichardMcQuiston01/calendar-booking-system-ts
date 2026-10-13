@@ -26,16 +26,19 @@ type TemporalZoned = {
 
 type TemporalApi = {
   ZonedDateTime: {
-    from: ( fields: {
-      timeZone: string;
-      year: number;
-      month: number;
-      day: number;
-      hour: number;
-      minute: number;
-      second: number;
-      millisecond: number;
-    } ) => TemporalZoned;
+    from: (
+      fields: {
+        timeZone: string;
+        year: number;
+        month: number;
+        day: number;
+        hour: number;
+        minute: number;
+        second: number;
+        millisecond: number;
+      },
+      options?: { overflow?: 'constrain' | 'reject' },
+    ) => TemporalZoned;
   };
 };
 
@@ -190,16 +193,21 @@ function zonedInstantFromTemporal(
   const [ year, month, day ] = dateOnly.split( '-' ).map( Number );
   const [ hour, minute ] = clockTime.split( ':' ).map( Number );
   try {
-    const zoned = temporal.ZonedDateTime.from( {
-      timeZone,
-      year,
-      month,
-      day,
-      hour,
-      minute,
-      second: 0,
-      millisecond: 0,
-    } );
+    // `reject` keeps Feb 29 in a non-leap year unrepresentable
+    // instead of silently constraining it to Feb 28.
+    const zoned = temporal.ZonedDateTime.from(
+      {
+        timeZone,
+        year,
+        month,
+        day,
+        hour,
+        minute,
+        second: 0,
+        millisecond: 0,
+      },
+      { overflow: 'reject' },
+    );
     return toInstant( new Date( zoned.epochMilliseconds ) );
   } catch {
     return undefined;
