@@ -669,7 +669,9 @@ Programming errors (passing a non-object where a snapshot is required) may throw
 
 ### 7.2 Validate
 
-`validateSnapshot(snapshot)` runs at the start of every public function (including itself, once). Checks:
+`validateSnapshot(snapshot)` runs once at the start of every public function (including itself) except the five pure hierarchy readers below. Internally a public call validates its input snapshot **once**, builds one lookup index (id maps, per-calendar rows, parent links), and passes both down; it does not re-validate an unchanged snapshot per layer. Write commands (`apply*`, `update*`) still validate the snapshot they produce.
+
+**Trusting readers.** `parentCalendarId`, `ancestorCalendarIds`, `descendantCalendarIds`, `inheritsBlocks`, and `rollsUpTo` do **not** call `validateSnapshot`: they are cheap tree walks that trust the caller's snapshot. On an invalid snapshot they answer from whatever links resolve (a cycle yields no parent) rather than returning an error. Call `validateSnapshot` first if the snapshot is untrusted. `requiredCalendarIds` validates. Checks:
 
 - Every `id` is a UUID and unique within its collection.
 - `entity_calendar` is unique on `entityId` and unique on `calendarId`.

@@ -1,7 +1,13 @@
+import {
+  buildSnapshotIndex,
+  calendarIn,
+  rangeError,
+  type SnapshotIndex,
+} from './lookup.js';
 import { normalizeUuid } from './ids.js';
-import { effectiveExclusiveBusy } from './occupancy.js';
+import { effectiveBusyIn } from './occupancy.js';
 import { expandRecurrence } from './recurrence.js';
-import { err, ok } from './result.js';
+import { ok } from './result.js';
 import { overlaps, rangeProblem } from './time.js';
 import type {
   CalendarSnapshot,
@@ -11,10 +17,6 @@ import type {
   Uuid,
 } from './types.js';
 import { validateSnapshot } from './validate.js';
-
-function rangeError( message: string ): Result<never> {
-  return err( { code: 'range', message } );
-}
 
 function splitAround(
   open: Occurrence,
@@ -64,6 +66,45 @@ function mergeIntervals( intervals: Occurrence[] ): Occurrence[] {
 }
 
 /**
+ * Open intervals for an already validated snapshot and checked range.
+ * Internal: callers validate once and share `index`.
+ */
+export function openAvailabilityIn(
+  index: SnapshotIndex,
+  calendarId: Uuid,
+  range: TimeRange,
+): Result<Occurrence[]> {
+  const calendar = calendarIn( index, calendarId );
+  if ( calendar === undefined ) {
+    return ok( [] );
+  }
+
+  const key = normalizeUuid( calendarId );
+  const opens: Occurrence[] = [];
+  for ( const rule of index.snapshot.availabilityRules ) {
+    if ( normalizeUuid( rule.calendarId ) !== key ) {
+      continue;
+    }
+    const expanded = expandRecurrence( rule, range, calendar.timeZone );
+    if ( !expanded.ok ) {
+      return expanded;
+    }
+    opens.push( ...expanded.value );
+  }
+
+  const busy = effectiveBusyIn( index, calendarId, range );
+  if ( !busy.ok ) {
+    return busy;
+  }
+
+  let remaining = opens;
+  for ( const block of busy.value ) {
+    remaining = remaining.flatMap( ( open ) => splitAround( open, block ) );
+  }
+  return ok( mergeIntervals( remaining ) );
+}
+
+/**
  * Working-hour rule occurrences minus effective exclusive busy.
  * Adjacent and overlapping remnants are merged (`a.end >= b.start`).
  */
@@ -80,35 +121,9 @@ export function openAvailability(
   if ( problem !== undefined ) {
     return rangeError( problem );
   }
-
-  const key = normalizeUuid( calendarId );
-  const calendar = snapshot.calendars.find(
-    ( row ) => normalizeUuid( row.id ) === key,
+  return openAvailabilityIn(
+    buildSnapshotIndex( snapshot ),
+    calendarId,
+    range,
   );
-  if ( calendar === undefined ) {
-    return ok( [] );
-  }
-
-  const opens: Occurrence[] = [];
-  for ( const rule of snapshot.availabilityRules ) {
-    if ( normalizeUuid( rule.calendarId ) !== key ) {
-      continue;
-    }
-    const expanded = expandRecurrence( rule, range, calendar.timeZone );
-    if ( !expanded.ok ) {
-      return expanded;
-    }
-    opens.push( ...expanded.value );
-  }
-
-  const busy = effectiveExclusiveBusy( snapshot, calendarId, range );
-  if ( !busy.ok ) {
-    return busy;
-  }
-
-  let remaining = opens;
-  for ( const block of busy.value ) {
-    remaining = remaining.flatMap( ( open ) => splitAround( open, block ) );
-  }
-  return ok( mergeIntervals( remaining ) );
 }
