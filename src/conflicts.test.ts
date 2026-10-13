@@ -442,3 +442,41 @@ describe( 'apply helpers used by check cases', () => {
     expect( result.ok ).toBe( true );
   } );
 } );
+
+describe( 'hostile recurrence limits', () => {
+  test( 'absurd count returns validation instead of throwing', () => {
+    const result = checkEvent(
+      teacherSnapshot(),
+      eventInput( {
+        recurrence: { freq: 'daily', count: 1_000_000_000_000 },
+      } ),
+    );
+    expect( result ).toMatchObject( {
+      ok: false,
+      error: { code: 'validation' },
+    } );
+  } );
+
+  test( 'interval 0 returns validation quickly', () => {
+    const started = Date.now();
+    const result = checkEvent(
+      teacherSnapshot(),
+      eventInput( { recurrence: { freq: 'daily', interval: 0 } } ),
+    );
+    expect( result ).toMatchObject( {
+      ok: false,
+      error: { code: 'validation' },
+    } );
+    expect( Date.now() - started ).toBeLessThan( 1000 );
+  } );
+
+  test( 'largest allowed count and interval do not throw', () => {
+    const result = checkEvent(
+      teacherSnapshot(),
+      eventInput( {
+        recurrence: { freq: 'yearly', interval: 1000, count: 10000 },
+      } ),
+    );
+    expect( result.ok ).toBe( true );
+  } );
+} );

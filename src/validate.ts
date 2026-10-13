@@ -1,4 +1,8 @@
 import { isUuid, normalizeUuid } from './ids.js';
+import {
+  MAX_RECURRENCE_COUNT,
+  MAX_RECURRENCE_INTERVAL,
+} from './recurrence.js';
 import { err, ok } from './result.js';
 import {
   isValidClockTime,
@@ -86,16 +90,24 @@ function recurrenceMessage(
     return 'recurrence.freq is invalid';
   }
   if ( rule.interval !== undefined ) {
-    if ( !Number.isInteger( rule.interval ) || rule.interval < 1 ) {
-      return 'recurrence.interval must be an integer >= 1';
+    if (
+      !Number.isInteger( rule.interval ) ||
+      rule.interval < 1 ||
+      rule.interval > MAX_RECURRENCE_INTERVAL
+    ) {
+      return `recurrence.interval must be an integer from 1 to ${ MAX_RECURRENCE_INTERVAL }`;
     }
   }
   if ( rule.until !== undefined && rule.count !== undefined ) {
     return 'recurrence cannot set both until and count';
   }
   if ( rule.count !== undefined ) {
-    if ( !Number.isInteger( rule.count ) || rule.count < 1 ) {
-      return 'recurrence.count must be an integer >= 1';
+    if (
+      !Number.isInteger( rule.count ) ||
+      rule.count < 1 ||
+      rule.count > MAX_RECURRENCE_COUNT
+    ) {
+      return `recurrence.count must be an integer from 1 to ${ MAX_RECURRENCE_COUNT }`;
     }
   }
   if (

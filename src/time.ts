@@ -167,20 +167,32 @@ type CivilParts = {
   minute: string;
 };
 
+const civilFormatters = new Map<TimeZone, Intl.DateTimeFormat>();
+
+/** Cached `Intl.DateTimeFormat`; construction dominates expansion cost. */
+export function civilFormatter( timeZone: TimeZone ): Intl.DateTimeFormat {
+  let fmt = civilFormatters.get( timeZone );
+  if ( fmt === undefined ) {
+    fmt = new Intl.DateTimeFormat( 'en-US', {
+      timeZone,
+      weekday: 'short',
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit',
+      hourCycle: 'h23',
+    } );
+    civilFormatters.set( timeZone, fmt );
+  }
+  return fmt;
+}
+
 function civilPartsInZone(
   date: Date,
   timeZone: TimeZone,
 ): CivilParts {
-  const fmt = new Intl.DateTimeFormat( 'en-US', {
-    timeZone,
-    weekday: 'short',
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-    hour: '2-digit',
-    minute: '2-digit',
-    hourCycle: 'h23',
-  } );
+  const fmt = civilFormatter( timeZone );
   const parts: Partial<CivilParts> = {};
   for ( const part of fmt.formatToParts( date ) ) {
     if (
