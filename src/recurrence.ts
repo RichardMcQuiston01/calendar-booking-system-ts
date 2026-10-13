@@ -1,6 +1,7 @@
 import { err, ok } from './result.js';
 import {
   civilDateInZone,
+  civilFormatter,
   isValidTimeZone,
   overlaps,
   parseInstant,
@@ -43,6 +44,15 @@ const DAYS_FROM_MONDAY: Record<Weekday, number> = {
   SU: 6,
 };
 
+/** Largest `interval` a recurrence rule may declare. */
+export const MAX_RECURRENCE_INTERVAL = 1000;
+
+/** Largest `count` a recurrence rule may declare. */
+export const MAX_RECURRENCE_COUNT = 10000;
+
+/** Most civil dates one expansion will walk before giving up. */
+export const MAX_EXPANDED_DATES = 20000;
+
 function isCalendarEvent(
   source: CalendarEvent | AvailabilityRule,
 ): source is CalendarEvent {
@@ -73,14 +83,12 @@ function withYear( dateOnly: DateOnly, year: number ): DateOnly {
 }
 
 function clockInZone( instant: Instant, timeZone: TimeZone ): ClockTime {
-  const fmt = new Intl.DateTimeFormat( 'en-US', {
-    timeZone,
-    hour: '2-digit',
-    minute: '2-digit',
-    hourCycle: 'h23',
-  } );
   const parts: { hour?: string; minute?: string } = {};
-  for ( const part of fmt.formatToParts( new Date( instant ) ) ) {
+  for (
+    const part of civilFormatter( timeZone ).formatToParts(
+      new Date( instant ),
+    )
+  ) {
     if ( part.type === 'hour' || part.type === 'minute' ) {
       parts[ part.type ] = part.value;
     }
@@ -222,12 +230,38 @@ export function expandRecurrence(
     return ok( [] );
   }
 
+  const interval = recurrence.interval ?? 1;
+  if (
+    !Number.isInteger( interval ) ||
+    interval < 1 ||
+    interval > MAX_RECURRENCE_INTERVAL
+  ) {
+    return err( {
+      code: 'validation',
+      message:
+        `recurrence.interval must be an integer from 1 to ${ MAX_RECURRENCE_INTERVAL }`,
+      details: { interval },
+    } );
+  }
+  if (
+    recurrence.count !== undefined &&
+    ( !Number.isInteger( recurrence.count ) ||
+      recurrence.count < 1 ||
+      recurrence.count > MAX_RECURRENCE_COUNT )
+  ) {
+    return err( {
+      code: 'validation',
+      message:
+        `recurrence.count must be an integer from 1 to ${ MAX_RECURRENCE_COUNT }`,
+      details: { count: recurrence.count },
+    } );
+  }
+
   const rangeStartDate = civilDateInZone( range.start, zone );
   const dtStart = isCalendarEvent( source )
     ? civilDateInZone( source.start, zone )
     : rangeStartDate;
   const stopDate = addDays( civilDateInZone( range.end, zone ), 1 );
-  const interval = recurrence.interval ?? 1;
   const excluded = new Set( source.excludedDates ?? [] );
   const byDay = recurrence.byDay;
   const untilMs =
@@ -284,12 +318,22 @@ export function expandRecurrence(
     consider( addDays( rangeStartDate, -1 ), false );
   }
 
+  let walked = 0;
   for ( const date of iterateCivilDates(
     recurrence,
     dtStart,
     stopDate,
     interval,
   ) ) {
+    walked += 1;
+    if ( walked > MAX_EXPANDED_DATES ) {
+      return err( {
+        code: 'range',
+        message:
+          `recurrence expands past ${ MAX_EXPANDED_DATES } dates; ` +
+          'narrow the range or set until/count',
+      } );
+    }
     if ( !consider( date, true ) ) {
       break;
     }

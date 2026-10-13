@@ -485,3 +485,48 @@ test( 'duplicate byDay yields each weekday once', () => {
     expect( result.value ).toHaveLength( 1 );
   }
 } );
+
+describe( 'expansion limits', () => {
+  const proto = {
+    start: '2026-09-08T13:00:00.000Z',
+    end: '2026-09-08T14:00:00.000Z',
+  };
+
+  for ( const interval of [ 0, -1, 1.5, 1001, Number.NaN ] ) {
+    test( `interval ${ interval } returns validation`, () => {
+      const result = expandRecurrence(
+        event( { freq: 'daily', interval }, proto ),
+        civilRange( '2026-09-08', '2026-09-10' ),
+        TZ,
+      );
+      expect( result ).toMatchObject( {
+        ok: false,
+        error: { code: 'validation' },
+      } );
+    } );
+  }
+
+  test( 'absurd count returns validation', () => {
+    const result = expandRecurrence(
+      event( { freq: 'daily', count: 1_000_000_000_000 }, proto ),
+      civilRange( '2026-09-08', '2026-09-10' ),
+      TZ,
+    );
+    expect( result ).toMatchObject( {
+      ok: false,
+      error: { code: 'validation' },
+    } );
+  } );
+
+  test( 'a very wide range of an unbounded series is a range error', () => {
+    const result = expandRecurrence(
+      event( { freq: 'daily' }, proto ),
+      civilRange( '2026-09-08', '2400-01-01' ),
+      TZ,
+    );
+    expect( result ).toMatchObject( {
+      ok: false,
+      error: { code: 'range' },
+    } );
+  } );
+} );

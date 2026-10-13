@@ -79,6 +79,12 @@ function addUtcYears( date: Date, years: number ): Date {
   return next;
 }
 
+/**
+ * Latest conflict horizon. Kept inside year 9999 so `toInstant` still
+ * yields the canonical four-digit-year form.
+ */
+const MAX_HORIZON_MS = Date.UTC( 9998, 0, 1 );
+
 function countHorizonStart(
   startAt: Date,
   rule: RecurrenceRule,
@@ -86,13 +92,19 @@ function countHorizonStart(
 ): Date {
   const interval = rule.interval ?? 1;
   const steps = Math.max( 0, count - 1 ) * interval;
+  let horizonMs: number;
   if ( rule.freq === 'daily' ) {
-    return new Date( startAt.getTime() + steps * DAY_MS );
+    horizonMs = startAt.getTime() + steps * DAY_MS;
+  } else if ( rule.freq === 'weekly' ) {
+    horizonMs = startAt.getTime() + steps * 7 * DAY_MS;
+  } else {
+    horizonMs = addUtcYears( startAt, steps ).getTime();
   }
-  if ( rule.freq === 'weekly' ) {
-    return new Date( startAt.getTime() + steps * 7 * DAY_MS );
+  // An unrepresentable horizon would make toISOString throw.
+  if ( !Number.isFinite( horizonMs ) || horizonMs > MAX_HORIZON_MS ) {
+    horizonMs = MAX_HORIZON_MS;
   }
-  return addUtcYears( startAt, steps );
+  return new Date( horizonMs );
 }
 
 /**
@@ -120,6 +132,7 @@ function eventConflictRange( record: CalendarEvent ): TimeRange {
       addUtcYears( startAt, 1 ).getTime() + duration,
     );
   }
+  boundEnd = Math.min( boundEnd, MAX_HORIZON_MS );
   return paddedRange( record.start, toInstant( new Date( boundEnd ) ) );
 }
 
