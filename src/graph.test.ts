@@ -193,6 +193,37 @@ describe( 'remove graph', () => {
     expect( snapshot.entities ).toHaveLength( 5 );
   } );
 
+  test( 'removeEntity of an attendee-only entity names the booking', () => {
+    const snapshot = schoolTreeSnapshot();
+    snapshot.entities.push( {
+      id: IDS.student,
+      entityType: 'student',
+      name: 'Student',
+      parentId: IDS.section,
+      createdAt: NOW,
+      updatedAt: NOW,
+    } );
+    snapshot.bookings.push( {
+      id: IDS.booking,
+      calendarId: IDS.teacherCal,
+      start: '2026-09-08T13:00:00.000Z',
+      end: '2026-09-08T14:00:00.000Z',
+      attendeeId: IDS.student,
+      createdAt: NOW,
+      updatedAt: NOW,
+    } );
+    const result = removeEntity( snapshot, IDS.student );
+    expect( result ).toEqual( {
+      ok: false,
+      error: {
+        code: 'integrity',
+        message: 'entity is referenced by bookings',
+        details: { id: IDS.student, bookingId: IDS.booking },
+      },
+    } );
+    expect( snapshot.entities ).toHaveLength( 6 );
+  } );
+
   test( 'unlink then remove calendar then entity succeeds', () => {
     const snapshot = schoolTreeSnapshot();
     const unlinked = removeEntityCalendar( snapshot, IDS.linkTeacher );

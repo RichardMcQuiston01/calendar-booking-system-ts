@@ -139,7 +139,8 @@ export function putEntityCalendar(
 }
 
 /**
- * Remove an entity. Fails if children or a calendar link exist.
+ * Remove an entity. Fails if children, a calendar link, or bookings
+ * naming it as attendee exist.
  */
 export function removeEntity(
   snapshot: CalendarSnapshot,
@@ -181,6 +182,18 @@ export function removeEntity(
       code: 'integrity',
       message: 'entity has a calendar link',
       details: { id },
+    } );
+  }
+  const booking = snapshot.bookings.find(
+    ( row ) =>
+      row.attendeeId !== undefined &&
+      normalizeUuid( row.attendeeId ) === key,
+  );
+  if ( booking !== undefined ) {
+    return err( {
+      code: 'integrity',
+      message: 'entity is referenced by bookings',
+      details: { id, bookingId: booking.id },
     } );
   }
   const next = cloneSnapshot( snapshot );
