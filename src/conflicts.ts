@@ -127,7 +127,10 @@ function contains(
   outer: Occurrence,
   inner: Occurrence,
 ): boolean {
-  return inner.start >= outer.start && inner.end <= outer.end;
+  return (
+    Date.parse( inner.start ) >= Date.parse( outer.start ) &&
+    Date.parse( inner.end ) <= Date.parse( outer.end )
+  );
 }
 
 function sameInterval( a: Occurrence, b: Occurrence ): boolean {

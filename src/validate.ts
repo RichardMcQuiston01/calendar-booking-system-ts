@@ -3,6 +3,7 @@ import { err, ok } from './result.js';
 import {
   isValidClockTime,
   isValidDateOnly,
+  isCanonicalInstant,
   isValidTimeZone,
   parseInstant,
 } from './time.js';
@@ -99,9 +100,10 @@ function recurrenceMessage(
   }
   if (
     rule.until !== undefined &&
-    parseInstant( rule.until ) === undefined
+    !isCanonicalInstant( rule.until )
   ) {
-    return 'recurrence.until is not an instant';
+    return 'recurrence.until must be a canonical UTC instant ' +
+      '(YYYY-MM-DDTHH:mm:ss.sssZ)';
   }
   if ( rule.byDay !== undefined ) {
     if (
@@ -133,12 +135,14 @@ function excludedDatesMessage(
 
 function rangeMessage( start: string, end: string ): string | undefined {
   const startAt = parseInstant( start );
-  if ( startAt === undefined ) {
-    return 'start is not an instant';
+  if ( startAt === undefined || !isCanonicalInstant( start ) ) {
+    return 'start must be a canonical UTC instant ' +
+      '(YYYY-MM-DDTHH:mm:ss.sssZ)';
   }
   const endAt = parseInstant( end );
-  if ( endAt === undefined ) {
-    return 'end is not an instant';
+  if ( endAt === undefined || !isCanonicalInstant( end ) ) {
+    return 'end must be a canonical UTC instant ' +
+      '(YYYY-MM-DDTHH:mm:ss.sssZ)';
   }
   if ( startAt.getTime() >= endAt.getTime() ) {
     return 'start must be before end';

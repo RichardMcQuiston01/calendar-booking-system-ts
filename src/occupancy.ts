@@ -5,7 +5,7 @@ import {
 import { normalizeUuid } from './ids.js';
 import { expandRecurrence } from './recurrence.js';
 import { err, ok } from './result.js';
-import { overlaps } from './time.js';
+import { overlaps, rangeProblem } from './time.js';
 import type {
   Calendar,
   CalendarSnapshot,
@@ -17,11 +17,8 @@ import type {
 } from './types.js';
 import { validateSnapshot } from './validate.js';
 
-function rangeError(): Result<never> {
-  return err( {
-    code: 'range',
-    message: 'range start must be before range end',
-  } );
+function rangeError( message: string ): Result<never> {
+  return err( { code: 'range', message } );
 }
 
 function calendarOf(
@@ -177,8 +174,9 @@ export function ownExclusiveBusy(
   if ( !validated.ok ) {
     return validated;
   }
-  if ( range.start >= range.end ) {
-    return rangeError();
+  const problem = rangeProblem( range );
+  if ( problem !== undefined ) {
+    return rangeError( problem );
   }
   const own = ownBusyUnchecked( snapshot, calendarId, range );
   if ( !own.ok ) {
@@ -202,8 +200,9 @@ export function inheritedBlocks(
   if ( !validated.ok ) {
     return validated;
   }
-  if ( range.start >= range.end ) {
-    return rangeError();
+  const problem = rangeProblem( range );
+  if ( problem !== undefined ) {
+    return rangeError( problem );
   }
   const inherited = inheritedUnchecked( snapshot, calendarId, range );
   if ( !inherited.ok ) {

@@ -90,6 +90,41 @@ export function toInstant( date: Date ): Instant {
   return date.toISOString();
 }
 
+const CANONICAL_INSTANT_RE =
+  /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/;
+
+/**
+ * True when `value` is the canonical `YYYY-MM-DDTHH:mm:ss.sssZ` UTC
+ * form of a real instant. Offsets, missing milliseconds, date-only,
+ * and zoneless strings are rejected so string and epoch comparisons
+ * always agree.
+ */
+export function isCanonicalInstant( value: string ): boolean {
+  if ( typeof value !== 'string' || !CANONICAL_INSTANT_RE.test( value ) ) {
+    return false;
+  }
+  const ms = Date.parse( value );
+  return !Number.isNaN( ms ) && new Date( ms ).toISOString() === value;
+}
+
+/**
+ * Describes why `range` is unusable, or `undefined` when both ends are
+ * canonical instants and start is strictly before end.
+ */
+export function rangeProblem( range: TimeRange ): string | undefined {
+  if (
+    !isCanonicalInstant( range.start ) ||
+    !isCanonicalInstant( range.end )
+  ) {
+    return 'range start and end must be canonical UTC instants ' +
+      '(YYYY-MM-DDTHH:mm:ss.sssZ)';
+  }
+  if ( Date.parse( range.start ) >= Date.parse( range.end ) ) {
+    return 'range start must be before range end';
+  }
+  return undefined;
+}
+
 /** Parse an instant string; `undefined` when `Date.parse` is `NaN`. */
 export function parseInstant( value: string ): Date | undefined {
   const ms = Date.parse( value );

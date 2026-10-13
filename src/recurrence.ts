@@ -4,6 +4,7 @@ import {
   isValidTimeZone,
   overlaps,
   parseInstant,
+  rangeProblem,
   toInstant,
   weekdayInZone,
   zonedInstant,
@@ -193,11 +194,9 @@ export function expandRecurrence(
   range: TimeRange,
   timeZone: TimeZone,
 ): Result<Occurrence[]> {
-  if ( range.start >= range.end ) {
-    return err( {
-      code: 'range',
-      message: 'range start must be before range end',
-    } );
+  const problem = rangeProblem( range );
+  if ( problem !== undefined ) {
+    return err( { code: 'range', message: problem } );
   }
 
   const zone = isCalendarEvent( source )
@@ -228,6 +227,10 @@ export function expandRecurrence(
   const interval = recurrence.interval ?? 1;
   const excluded = new Set( source.excludedDates ?? [] );
   const byDay = recurrence.byDay;
+  const untilMs =
+    recurrence.until === undefined
+      ? undefined
+      : Date.parse( recurrence.until );
   const occurrences: Occurrence[] = [];
   let produced = 0;
 
@@ -248,7 +251,10 @@ export function expandRecurrence(
     ) {
       return true;
     }
-    if ( recurrence.until !== undefined && occ.start > recurrence.until ) {
+    if (
+      untilMs !== undefined &&
+      Date.parse( occ.start ) > untilMs
+    ) {
       return false;
     }
     const hits = overlaps( occ, range );
