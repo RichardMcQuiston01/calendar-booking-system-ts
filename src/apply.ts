@@ -5,7 +5,7 @@ import {
 } from './conflicts.js';
 import { isUuid, normalizeUuid } from './ids.js';
 import { err, ok } from './result.js';
-import { cloneSnapshot, stamp } from './snapshot.js';
+import { cloneSnapshot, copyRecord, stamp } from './snapshot.js';
 import { isValidDateOnly, nowInstant } from './time.js';
 import type {
   ApplyOptions,
@@ -71,7 +71,7 @@ function refuseConflicts(
   return ok( true );
 }
 
-function commitRecord<T>(
+function commitRecord<T extends object>(
   snapshot: CalendarSnapshot,
   write: ( next: CalendarSnapshot ) => T,
 ): Result<ApplySuccess<T>> {
@@ -81,7 +81,8 @@ function commitRecord<T>(
   if ( !result.ok ) {
     return result;
   }
-  return ok( { snapshot: next, record } );
+  // The snapshot keeps its own row; callers get an independent copy.
+  return ok( { snapshot: next, record: copyRecord( record ) } );
 }
 
 function commitSnapshot(
@@ -103,8 +104,10 @@ function toEvent(
   now: string,
 ): CalendarEvent {
   return {
-    ...input,
-    occupancy: input.occupancy ?? DEFAULT_OCCUPANCY,
+    ...copyRecord( input ),
+    occupancy: copyRecord(
+      input.occupancy ?? DEFAULT_OCCUPANCY,
+    ),
     ...stamp( existing, now ),
   };
 }
@@ -115,8 +118,10 @@ function toSlot(
   now: string,
 ): BookableSlot {
   return {
-    ...input,
-    occupancy: input.occupancy ?? DEFAULT_OCCUPANCY,
+    ...copyRecord( input ),
+    occupancy: copyRecord(
+      input.occupancy ?? DEFAULT_OCCUPANCY,
+    ),
     ...stamp( existing, now ),
   };
 }
@@ -126,7 +131,7 @@ function toBooking(
   existing: Booking | undefined,
   now: string,
 ): Booking {
-  return { ...input, ...stamp( existing, now ) };
+  return { ...copyRecord( input ), ...stamp( existing, now ) };
 }
 
 function toRule(
@@ -134,7 +139,7 @@ function toRule(
   existing: AvailabilityRule | undefined,
   now: string,
 ): AvailabilityRule {
-  return { ...input, ...stamp( existing, now ) };
+  return { ...copyRecord( input ), ...stamp( existing, now ) };
 }
 
 function requireId(
@@ -310,10 +315,10 @@ export function excludeOccurrence(
   }
   const dates = existing.excludedDates ?? [];
   const excludedDates = dates.includes( date )
-    ? dates
+    ? [ ...dates ]
     : [ ...dates, date ];
   const record: CalendarEvent = {
-    ...existing,
+    ...copyRecord( existing ),
     excludedDates,
     ...stamp( existing, nowOf( opts ) ),
   };

@@ -26,16 +26,19 @@ type TemporalZoned = {
 
 type TemporalApi = {
   ZonedDateTime: {
-    from: ( fields: {
-      timeZone: string;
-      year: number;
-      month: number;
-      day: number;
-      hour: number;
-      minute: number;
-      second: number;
-      millisecond: number;
-    } ) => TemporalZoned;
+    from: (
+      fields: {
+        timeZone: string;
+        year: number;
+        month: number;
+        day: number;
+        hour: number;
+        minute: number;
+        second: number;
+        millisecond: number;
+      },
+      options?: { overflow?: 'constrain' | 'reject' },
+    ) => TemporalZoned;
   };
 };
 
@@ -87,6 +90,41 @@ export function toInstant( date: Date ): Instant {
   return date.toISOString();
 }
 
+const CANONICAL_INSTANT_RE =
+  /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/;
+
+/**
+ * True when `value` is the canonical `YYYY-MM-DDTHH:mm:ss.sssZ` UTC
+ * form of a real instant. Offsets, missing milliseconds, date-only,
+ * and zoneless strings are rejected so string and epoch comparisons
+ * always agree.
+ */
+export function isCanonicalInstant( value: string ): boolean {
+  if ( typeof value !== 'string' || !CANONICAL_INSTANT_RE.test( value ) ) {
+    return false;
+  }
+  const ms = Date.parse( value );
+  return !Number.isNaN( ms ) && new Date( ms ).toISOString() === value;
+}
+
+/**
+ * Describes why `range` is unusable, or `undefined` when both ends are
+ * canonical instants and start is strictly before end.
+ */
+export function rangeProblem( range: TimeRange ): string | undefined {
+  if (
+    !isCanonicalInstant( range.start ) ||
+    !isCanonicalInstant( range.end )
+  ) {
+    return 'range start and end must be canonical UTC instants ' +
+      '(YYYY-MM-DDTHH:mm:ss.sssZ)';
+  }
+  if ( Date.parse( range.start ) >= Date.parse( range.end ) ) {
+    return 'range start must be before range end';
+  }
+  return undefined;
+}
+
 /** Parse an instant string; `undefined` when `Date.parse` is `NaN`. */
 export function parseInstant( value: string ): Date | undefined {
   const ms = Date.parse( value );
@@ -129,20 +167,32 @@ type CivilParts = {
   minute: string;
 };
 
+const civilFormatters = new Map<TimeZone, Intl.DateTimeFormat>();
+
+/** Cached `Intl.DateTimeFormat`; construction dominates expansion cost. */
+export function civilFormatter( timeZone: TimeZone ): Intl.DateTimeFormat {
+  let fmt = civilFormatters.get( timeZone );
+  if ( fmt === undefined ) {
+    fmt = new Intl.DateTimeFormat( 'en-US', {
+      timeZone,
+      weekday: 'short',
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit',
+      hourCycle: 'h23',
+    } );
+    civilFormatters.set( timeZone, fmt );
+  }
+  return fmt;
+}
+
 function civilPartsInZone(
   date: Date,
   timeZone: TimeZone,
 ): CivilParts {
-  const fmt = new Intl.DateTimeFormat( 'en-US', {
-    timeZone,
-    weekday: 'short',
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-    hour: '2-digit',
-    minute: '2-digit',
-    hourCycle: 'h23',
-  } );
+  const fmt = civilFormatter( timeZone );
   const parts: Partial<CivilParts> = {};
   for ( const part of fmt.formatToParts( date ) ) {
     if (
@@ -190,16 +240,21 @@ function zonedInstantFromTemporal(
   const [ year, month, day ] = dateOnly.split( '-' ).map( Number );
   const [ hour, minute ] = clockTime.split( ':' ).map( Number );
   try {
-    const zoned = temporal.ZonedDateTime.from( {
-      timeZone,
-      year,
-      month,
-      day,
-      hour,
-      minute,
-      second: 0,
-      millisecond: 0,
-    } );
+    // `reject` keeps Feb 29 in a non-leap year unrepresentable
+    // instead of silently constraining it to Feb 28.
+    const zoned = temporal.ZonedDateTime.from(
+      {
+        timeZone,
+        year,
+        month,
+        day,
+        hour,
+        minute,
+        second: 0,
+        millisecond: 0,
+      },
+      { overflow: 'reject' },
+    );
     return toInstant( new Date( zoned.epochMilliseconds ) );
   } catch {
     return undefined;

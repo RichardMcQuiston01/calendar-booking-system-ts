@@ -23,7 +23,6 @@ import type {
   Instant,
   Occupancy,
   Occurrence,
-  RecurrenceRule,
   Result,
   SlotInput,
   TimeRange,
@@ -79,47 +78,95 @@ function addUtcYears( date: Date, years: number ): Date {
   return next;
 }
 
-function countHorizonStart(
-  startAt: Date,
-  rule: RecurrenceRule,
-  count: number,
-): Date {
-  const interval = rule.interval ?? 1;
-  const steps = Math.max( 0, count - 1 ) * interval;
-  if ( rule.freq === 'daily' ) {
-    return new Date( startAt.getTime() + steps * DAY_MS );
+/**
+ * Latest conflict horizon. Kept inside year 9999 so `toInstant` still
+ * yields the canonical four-digit-year form.
+ */
+const MAX_HORIZON_MS = Date.UTC( 9998, 0, 1 );
+
+/**
+ * End of the last occurrence of a `count`-bounded series, found by
+ * expanding the series itself so `byDay` and skipped civil dates are
+ * honored. `undefined` when expansion fails or yields nothing.
+ */
+function countedSeriesEnd(
+  event: CalendarEvent,
+  zone: string,
+): number | undefined {
+  const expanded = expandRecurrence(
+    event,
+    {
+      start: event.start,
+      end: toInstant( new Date( MAX_HORIZON_MS ) ),
+    },
+    zone,
+  );
+  if ( !expanded.ok ) {
+    return undefined;
   }
-  if ( rule.freq === 'weekly' ) {
-    return new Date( startAt.getTime() + steps * 7 * DAY_MS );
-  }
-  return addUtcYears( startAt, steps );
+  const last = expanded.value[ expanded.value.length - 1 ];
+  return last === undefined ? undefined : Date.parse( last.end );
 }
 
 /**
- * Conflict window for an event: prototype ±1 day, or the series
- * bound when the event recurs (`until`, `count`, else one year).
+ * Latest instant a finite series reaches: its `until` plus one
+ * occurrence, its `count`-th occurrence, or one year when unbounded.
  */
-function eventConflictRange( record: CalendarEvent ): TimeRange {
-  if ( record.recurrence === undefined ) {
-    return paddedRange( record.start, record.end );
-  }
+function seriesEnd( record: CalendarEvent, zone: string ): number {
   const startAt = parseInstant( record.start ) ?? new Date( 0 );
   const endAt = parseInstant( record.end ) ?? startAt;
   const duration = Math.max( 0, endAt.getTime() - startAt.getTime() );
   const rule = record.recurrence;
-  let boundEnd = endAt.getTime();
+  if ( rule === undefined ) {
+    return endAt.getTime();
+  }
   if ( rule.until !== undefined ) {
     const untilAt = parseInstant( rule.until ) ?? startAt;
-    boundEnd = Math.max( boundEnd, untilAt.getTime() + duration );
-  } else if ( rule.count !== undefined ) {
-    const lastStart = countHorizonStart( startAt, rule, rule.count );
-    boundEnd = Math.max( boundEnd, lastStart.getTime() + duration );
-  } else {
-    boundEnd = Math.max(
-      boundEnd,
-      addUtcYears( startAt, 1 ).getTime() + duration,
+    return Math.max( endAt.getTime(), untilAt.getTime() + duration );
+  }
+  if ( rule.count !== undefined ) {
+    return Math.max(
+      endAt.getTime(),
+      countedSeriesEnd( record, zone ) ?? endAt.getTime(),
     );
   }
+  return Math.max(
+    endAt.getTime(),
+    addUtcYears( startAt, 1 ).getTime() + duration,
+  );
+}
+
+/**
+ * Conflict window for an event: prototype ±1 day, or the series
+ * bound when the event recurs (`until`, `count`). An unbounded series
+ * is scanned through the latest instant any other event, slot, or
+ * booking in the snapshot reaches (at least one year), so a later
+ * occurrence cannot double-book silently.
+ */
+function eventConflictRange(
+  record: CalendarEvent,
+  zone: string,
+  others: CalendarSnapshot,
+): TimeRange {
+  if ( record.recurrence === undefined ) {
+    return paddedRange( record.start, record.end );
+  }
+  let boundEnd = seriesEnd( record, zone );
+  const unbounded =
+    record.recurrence.until === undefined &&
+    record.recurrence.count === undefined;
+  if ( unbounded ) {
+    for ( const event of others.events ) {
+      boundEnd = Math.max(
+        boundEnd,
+        seriesEnd( event, event.timeZone ?? zone ),
+      );
+    }
+    for ( const row of [ ...others.slots, ...others.bookings ] ) {
+      boundEnd = Math.max( boundEnd, Date.parse( row.end ) );
+    }
+  }
+  boundEnd = Math.min( boundEnd, MAX_HORIZON_MS );
   return paddedRange( record.start, toInstant( new Date( boundEnd ) ) );
 }
 
@@ -127,7 +174,10 @@ function contains(
   outer: Occurrence,
   inner: Occurrence,
 ): boolean {
-  return inner.start >= outer.start && inner.end <= outer.end;
+  return (
+    Date.parse( inner.start ) >= Date.parse( outer.start ) &&
+    Date.parse( inner.end ) <= Date.parse( outer.end )
+  );
 }
 
 function sameInterval( a: Occurrence, b: Occurrence ): boolean {
@@ -411,18 +461,15 @@ function collectEventConflicts(
   if ( calendar === undefined ) {
     return notFound( 'calendar', record.calendarId );
   }
-  const range = eventConflictRange( record );
-  const expanded = expandRecurrence(
-    record,
-    range,
-    record.timeZone ?? calendar.timeZone,
-  );
-  if ( !expanded.ok ) {
-    return expanded;
-  }
   const filtered = snapshotExcluding( snapshot, {
     eventId: record.id,
   } );
+  const zone = record.timeZone ?? calendar.timeZone;
+  const range = eventConflictRange( record, zone, filtered );
+  const expanded = expandRecurrence( record, range, zone );
+  if ( !expanded.ok ) {
+    return expanded;
+  }
   const own = ownExclusiveBusy( filtered, record.calendarId, range );
   if ( !own.ok ) {
     return own;
@@ -560,6 +607,33 @@ function collectEventSeat(
   } );
 }
 
+/**
+ * Highest number of `rows` that are active at the same instant inside
+ * `within`. Rows that only touch or lie outside `within` do not count.
+ */
+function peakConcurrency(
+  rows: Occurrence[],
+  within: Occurrence,
+): number {
+  const lower = Date.parse( within.start );
+  const upper = Date.parse( within.end );
+  const probes = [
+    lower,
+    ...rows
+      .map( ( row ) => Date.parse( row.start ) )
+      .filter( ( at ) => at > lower && at < upper ),
+  ];
+  let peak = 0;
+  for ( const at of probes ) {
+    const active = rows.filter(
+      ( row ) =>
+        Date.parse( row.start ) <= at && at < Date.parse( row.end ),
+    ).length;
+    peak = Math.max( peak, active );
+  }
+  return peak;
+}
+
 function collectSlotSeat(
   snapshot: CalendarSnapshot,
   record: Booking,
@@ -594,7 +668,7 @@ function collectSlotSeat(
   }
   const key = normalizeUuid( slot.id );
   const self = normalizeUuid( record.id );
-  const current = snapshot.bookings.filter( ( row ) => {
+  const others = snapshot.bookings.filter( ( row ) => {
     if ( row.slotId === undefined ) {
       return false;
     }
@@ -604,8 +678,11 @@ function collectSlotSeat(
     if ( normalizeUuid( row.id ) === self ) {
       return false;
     }
-    return true;
-  } ).length;
+    return overlaps( { start: row.start, end: row.end }, bookingOcc );
+  } );
+  // A slot is a window of time, not one session: only bookings that
+  // share an instant with the candidate hold seats against it.
+  const current = peakConcurrency( others, bookingOcc );
   const max = occupancyMax( slot.occupancy );
   const conflicts: Conflict[] = [];
   if ( current + 1 > max ) {
@@ -670,6 +747,40 @@ function collectAdHoc(
   return ok( { conflicts } );
 }
 
+/**
+ * Other bookings in the snapshot held by the same attendee that
+ * overlap the candidate. An attendee cannot hold two seats in one
+ * occurrence or be in two places at once. Only bookings the host has
+ * loaded can be seen, so hosts must load an attendee's other
+ * bookings to get a cross-calendar check.
+ */
+function attendeeConflicts(
+  snapshot: CalendarSnapshot,
+  record: Booking,
+): Conflict[] {
+  if ( record.attendeeId === undefined ) {
+    return [];
+  }
+  const attendee = normalizeUuid( record.attendeeId );
+  const self = normalizeUuid( record.id );
+  const candidate = { start: record.start, end: record.end };
+  return snapshot.bookings
+    .filter(
+      ( row ) =>
+        row.attendeeId !== undefined &&
+        normalizeUuid( row.attendeeId ) === attendee &&
+        normalizeUuid( row.id ) !== self &&
+        overlaps( { start: row.start, end: row.end }, candidate ),
+    )
+    .map( ( row ): Conflict => ( {
+      kind: 'attendee-conflict',
+      calendarId: row.calendarId,
+      start: row.start,
+      end: row.end,
+      source: { type: 'booking', id: row.id },
+    } ) );
+}
+
 function collectBookingConflicts(
   snapshot: CalendarSnapshot,
   record: Booking,
@@ -677,13 +788,24 @@ function collectBookingConflicts(
   if ( calendarOf( snapshot, record.calendarId ) === undefined ) {
     return notFound( 'calendar', record.calendarId );
   }
+  let report: Result<CheckReport>;
   if ( record.eventId !== undefined ) {
-    return collectEventSeat( snapshot, record, record.eventId );
+    report = collectEventSeat( snapshot, record, record.eventId );
+  } else if ( record.slotId !== undefined ) {
+    report = collectSlotSeat( snapshot, record, record.slotId );
+  } else {
+    report = collectAdHoc( snapshot, record );
   }
-  if ( record.slotId !== undefined ) {
-    return collectSlotSeat( snapshot, record, record.slotId );
+  if ( !report.ok ) {
+    return report;
   }
-  return collectAdHoc( snapshot, record );
+  return ok( {
+    ...report.value,
+    conflicts: [
+      ...report.value.conflicts,
+      ...attendeeConflicts( snapshot, record ),
+    ],
+  } );
 }
 
 function requireCalendar(

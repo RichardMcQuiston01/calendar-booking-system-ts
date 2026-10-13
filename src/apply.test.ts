@@ -545,3 +545,60 @@ describe( 'delete cascades and rules', () => {
     expect( result.error.code ).toBe( 'not_found' );
   } );
 } );
+
+describe( 'writes do not alias caller data', () => {
+  test( 'excludeOccurrence of an existing date returns a fresh array', () => {
+    const snapshot = teacherSnapshot( {
+      events: [ eventOn( IDS.teacherCal, {
+        recurrence: { freq: 'weekly' },
+        excludedDates: [ '2026-09-09', '2026-12-25' ],
+      } ) ],
+    } );
+    const result = excludeOccurrence(
+      snapshot,
+      IDS.event,
+      '2026-09-09',
+      { now: NOW },
+    );
+    expect( result.ok ).toBe( true );
+    if ( !result.ok ) {
+      return;
+    }
+    result.value.record.excludedDates?.push( '2030-01-01' );
+    expect( snapshot.events[ 0 ]?.excludedDates ).toEqual( [
+      '2026-09-09',
+      '2026-12-25',
+    ] );
+    expect( result.value.snapshot.events[ 0 ]?.excludedDates ).toEqual( [
+      '2026-09-09',
+      '2026-12-25',
+    ] );
+  } );
+
+  test( 'applyEvent stores a copy of the input recurrence', () => {
+    const recurrence = { freq: 'weekly' as const, count: 3 };
+    const result = applyEvent(
+      teacherSnapshot(),
+      eventInput( {
+        start: '2026-10-06T13:00:00.000Z',
+        end: '2026-10-06T14:00:00.000Z',
+        recurrence,
+      } ),
+      { now: NOW },
+    );
+    expect( result.ok ).toBe( true );
+    if ( !result.ok ) {
+      return;
+    }
+    const stored = result.value.snapshot.events.find(
+      ( row ) => row.id === EVENT_B,
+    );
+    result.value.record.title = 'mutated';
+    if ( result.value.record.recurrence ) {
+      result.value.record.recurrence.count = 99;
+    }
+    recurrence.count = 7;
+    expect( stored?.title ).toBe( 'Overlap' );
+    expect( stored?.recurrence?.count ).toBe( 3 );
+  } );
+} );

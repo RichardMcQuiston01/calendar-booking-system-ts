@@ -2,6 +2,7 @@ import { normalizeUuid } from './ids.js';
 import { effectiveExclusiveBusy } from './occupancy.js';
 import { expandRecurrence } from './recurrence.js';
 import { err, ok } from './result.js';
+import { overlaps, rangeProblem } from './time.js';
 import type {
   CalendarSnapshot,
   Occurrence,
@@ -11,25 +12,22 @@ import type {
 } from './types.js';
 import { validateSnapshot } from './validate.js';
 
-function rangeError(): Result<never> {
-  return err( {
-    code: 'range',
-    message: 'range start must be before range end',
-  } );
+function rangeError( message: string ): Result<never> {
+  return err( { code: 'range', message } );
 }
 
 function splitAround(
   open: Occurrence,
   busy: Occurrence,
 ): Occurrence[] {
-  if ( busy.end <= open.start || busy.start >= open.end ) {
+  if ( !overlaps( open, busy ) ) {
     return [ open ];
   }
   const pieces: Occurrence[] = [];
-  if ( open.start < busy.start ) {
+  if ( Date.parse( open.start ) < Date.parse( busy.start ) ) {
     pieces.push( { start: open.start, end: busy.start } );
   }
-  if ( busy.end < open.end ) {
+  if ( Date.parse( busy.end ) < Date.parse( open.end ) ) {
     pieces.push( { start: busy.end, end: open.end } );
   }
   return pieces;
@@ -40,8 +38,8 @@ function mergeIntervals( intervals: Occurrence[] ): Occurrence[] {
     return [];
   }
   const sorted = [ ...intervals ].sort( ( a, b ) => {
-    const start = a.start.localeCompare( b.start );
-    return start !== 0 ? start : a.end.localeCompare( b.end );
+    const start = Date.parse( a.start ) - Date.parse( b.start );
+    return start !== 0 ? start : Date.parse( a.end ) - Date.parse( b.end );
   } );
   const first = sorted[ 0 ];
   if ( first === undefined ) {
@@ -54,8 +52,8 @@ function mergeIntervals( intervals: Occurrence[] ): Occurrence[] {
     if ( current === undefined || last === undefined ) {
       continue;
     }
-    if ( last.end >= current.start ) {
-      if ( current.end > last.end ) {
+    if ( Date.parse( last.end ) >= Date.parse( current.start ) ) {
+      if ( Date.parse( current.end ) > Date.parse( last.end ) ) {
         last.end = current.end;
       }
     } else {
@@ -78,8 +76,9 @@ export function openAvailability(
   if ( !validated.ok ) {
     return validated;
   }
-  if ( range.start >= range.end ) {
-    return rangeError();
+  const problem = rangeProblem( range );
+  if ( problem !== undefined ) {
+    return rangeError( problem );
   }
 
   const key = normalizeUuid( calendarId );

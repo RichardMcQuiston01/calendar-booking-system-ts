@@ -1,8 +1,14 @@
 import { isUuid, normalizeUuid } from './ids.js';
+import {
+  MAX_RECURRENCE_COUNT,
+  MAX_RECURRENCE_INTERVAL,
+  ruleNeedsStartDate,
+} from './recurrence.js';
 import { err, ok } from './result.js';
 import {
   isValidClockTime,
   isValidDateOnly,
+  isCanonicalInstant,
   isValidTimeZone,
   parseInstant,
 } from './time.js';
@@ -85,23 +91,32 @@ function recurrenceMessage(
     return 'recurrence.freq is invalid';
   }
   if ( rule.interval !== undefined ) {
-    if ( !Number.isInteger( rule.interval ) || rule.interval < 1 ) {
-      return 'recurrence.interval must be an integer >= 1';
+    if (
+      !Number.isInteger( rule.interval ) ||
+      rule.interval < 1 ||
+      rule.interval > MAX_RECURRENCE_INTERVAL
+    ) {
+      return `recurrence.interval must be an integer from 1 to ${ MAX_RECURRENCE_INTERVAL }`;
     }
   }
   if ( rule.until !== undefined && rule.count !== undefined ) {
     return 'recurrence cannot set both until and count';
   }
   if ( rule.count !== undefined ) {
-    if ( !Number.isInteger( rule.count ) || rule.count < 1 ) {
-      return 'recurrence.count must be an integer >= 1';
+    if (
+      !Number.isInteger( rule.count ) ||
+      rule.count < 1 ||
+      rule.count > MAX_RECURRENCE_COUNT
+    ) {
+      return `recurrence.count must be an integer from 1 to ${ MAX_RECURRENCE_COUNT }`;
     }
   }
   if (
     rule.until !== undefined &&
-    parseInstant( rule.until ) === undefined
+    !isCanonicalInstant( rule.until )
   ) {
-    return 'recurrence.until is not an instant';
+    return 'recurrence.until must be a canonical UTC instant ' +
+      '(YYYY-MM-DDTHH:mm:ss.sssZ)';
   }
   if ( rule.byDay !== undefined ) {
     if (
@@ -109,6 +124,9 @@ function recurrenceMessage(
       rule.byDay.some( ( day ) => !WEEKDAYS.has( day ) )
     ) {
       return 'recurrence.byDay has an invalid weekday';
+    }
+    if ( new Set( rule.byDay ).size !== rule.byDay.length ) {
+      return 'recurrence.byDay must not repeat a weekday';
     }
   }
   return undefined;
@@ -133,12 +151,14 @@ function excludedDatesMessage(
 
 function rangeMessage( start: string, end: string ): string | undefined {
   const startAt = parseInstant( start );
-  if ( startAt === undefined ) {
-    return 'start is not an instant';
+  if ( startAt === undefined || !isCanonicalInstant( start ) ) {
+    return 'start must be a canonical UTC instant ' +
+      '(YYYY-MM-DDTHH:mm:ss.sssZ)';
   }
   const endAt = parseInstant( end );
-  if ( endAt === undefined ) {
-    return 'end is not an instant';
+  if ( endAt === undefined || !isCanonicalInstant( end ) ) {
+    return 'end must be a canonical UTC instant ' +
+      '(YYYY-MM-DDTHH:mm:ss.sssZ)';
   }
   if ( startAt.getTime() >= endAt.getTime() ) {
     return 'start must be before end';
@@ -329,6 +349,22 @@ function validateRule( rule: AvailabilityRule ): Result<true> {
   const recurrence = recurrenceMessage( rule.recurrence, true );
   if ( recurrence ) {
     return fail( 'validation', recurrence, { id: rule.id } );
+  }
+  if (
+    rule.startDate !== undefined &&
+    !isValidDateOnly( rule.startDate )
+  ) {
+    return fail( 'validation', 'startDate is not a DateOnly', {
+      id: rule.id,
+    } );
+  }
+  if ( rule.startDate === undefined && ruleNeedsStartDate( rule ) ) {
+    return fail(
+      'validation',
+      'availability rule needs startDate when recurrence.interval ' +
+        'is greater than 1 or recurrence.count is set',
+      { id: rule.id },
+    );
   }
   const excluded = excludedDatesMessage( rule.excludedDates );
   if ( excluded ) {

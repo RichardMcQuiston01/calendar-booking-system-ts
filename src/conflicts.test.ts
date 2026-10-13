@@ -442,3 +442,293 @@ describe( 'apply helpers used by check cases', () => {
     expect( result.ok ).toBe( true );
   } );
 } );
+
+describe( 'hostile recurrence limits', () => {
+  test( 'absurd count returns validation instead of throwing', () => {
+    const result = checkEvent(
+      teacherSnapshot(),
+      eventInput( {
+        recurrence: { freq: 'daily', count: 1_000_000_000_000 },
+      } ),
+    );
+    expect( result ).toMatchObject( {
+      ok: false,
+      error: { code: 'validation' },
+    } );
+  } );
+
+  test( 'interval 0 returns validation quickly', () => {
+    const started = Date.now();
+    const result = checkEvent(
+      teacherSnapshot(),
+      eventInput( { recurrence: { freq: 'daily', interval: 0 } } ),
+    );
+    expect( result ).toMatchObject( {
+      ok: false,
+      error: { code: 'validation' },
+    } );
+    expect( Date.now() - started ).toBeLessThan( 1000 );
+  } );
+
+  test( 'largest allowed count and interval do not throw', () => {
+    const result = checkEvent(
+      teacherSnapshot(),
+      eventInput( {
+        recurrence: { freq: 'yearly', interval: 1000, count: 10000 },
+      } ),
+    );
+    expect( result.ok ).toBe( true );
+  } );
+} );
+
+describe( 'checkEvent conflict horizon', () => {
+  test( 'count 1 with byDay MO from a Friday prototype hits Monday', () => {
+    const snapshot = teacherSnapshot( {
+      events: [
+        eventOn( IDS.teacherCal, {
+          start: '2026-09-14T13:00:00.000Z',
+          end: '2026-09-14T14:00:00.000Z',
+        } ),
+      ],
+    } );
+    const result = checkEvent(
+      snapshot,
+      eventInput( {
+        start: '2026-09-11T13:00:00.000Z',
+        end: '2026-09-11T14:00:00.000Z',
+        recurrence: { freq: 'weekly', byDay: [ 'MO' ], count: 1 },
+      } ),
+    );
+    expect( result.ok ).toBe( true );
+    if ( result.ok ) {
+      expect( result.value.conflicts ).toHaveLength( 1 );
+      expect( result.value.conflicts[ 0 ]?.kind ).toBe(
+        'exclusive-overlap',
+      );
+    }
+  } );
+
+  test( 'unbounded weekly series sees an event past one year', () => {
+    const snapshot = teacherSnapshot( {
+      events: [
+        eventOn( IDS.teacherCal, {
+          start: '2027-09-14T13:00:00.000Z',
+          end: '2027-09-14T14:00:00.000Z',
+        } ),
+      ],
+    } );
+    const result = checkEvent(
+      snapshot,
+      eventInput( { recurrence: { freq: 'weekly' } } ),
+    );
+    expect( result.ok ).toBe( true );
+    if ( result.ok ) {
+      expect( result.value.conflicts.length ).toBeGreaterThan( 0 );
+    }
+  } );
+} );
+
+describe( 'slot seat capacity', () => {
+  const window = {
+    start: '2026-09-08T12:00:00.000Z',
+    end: '2026-09-08T18:00:00.000Z',
+  };
+
+  function snapshotWithBooking(
+    max: number,
+    bookings: Array<{ id: string; start: string; end: string }>,
+  ): ReturnType<typeof schoolTreeSnapshot> {
+    return teacherSnapshot( {
+      slots: [ slotOn( IDS.teacherCal, {
+        ...window,
+        occupancy: { kind: 'capacity', max },
+      } ) ],
+      bookings: bookings.map( ( row ) => ( {
+        ...row,
+        calendarId: IDS.teacherCal,
+        slotId: IDS.slot,
+        createdAt: NOW,
+        updatedAt: NOW,
+      } ) ),
+    } );
+  }
+
+  function seat( start: string, end: string ) {
+    return {
+      id: BOOKING_C,
+      calendarId: IDS.teacherCal,
+      slotId: IDS.slot,
+      start,
+      end,
+    };
+  }
+
+  test( 'non-overlapping booking fits a capacity-1 slot', () => {
+    const snapshot = snapshotWithBooking( 1, [ {
+      id: IDS.booking,
+      start: '2026-09-08T12:00:00.000Z',
+      end: '2026-09-08T13:00:00.000Z',
+    } ] );
+    const result = checkBooking(
+      snapshot,
+      seat( '2026-09-08T15:00:00.000Z', '2026-09-08T16:00:00.000Z' ),
+    );
+    expect( result ).toEqual( {
+      ok: true,
+      value: { conflicts: [], remainingCapacity: 0 },
+    } );
+  } );
+
+  test( 'back-to-back (touching) booking fits a capacity-1 slot', () => {
+    const snapshot = snapshotWithBooking( 1, [ {
+      id: IDS.booking,
+      start: '2026-09-08T12:00:00.000Z',
+      end: '2026-09-08T13:00:00.000Z',
+    } ] );
+    const result = checkBooking(
+      snapshot,
+      seat( '2026-09-08T13:00:00.000Z', '2026-09-08T14:00:00.000Z' ),
+    );
+    expect( result.ok && result.value.conflicts ).toEqual( [] );
+  } );
+
+  test( 'overlapping booking is capacity-full on a capacity-1 slot', () => {
+    const snapshot = snapshotWithBooking( 1, [ {
+      id: IDS.booking,
+      start: '2026-09-08T12:00:00.000Z',
+      end: '2026-09-08T13:00:00.000Z',
+    } ] );
+    const result = checkBooking(
+      snapshot,
+      seat( '2026-09-08T12:30:00.000Z', '2026-09-08T13:30:00.000Z' ),
+    );
+    expect( result.ok ).toBe( true );
+    if ( result.ok ) {
+      expect( result.value.conflicts.map( ( row ) => row.kind ) ).toEqual(
+        [ 'capacity-full' ],
+      );
+    }
+  } );
+
+  test( 'seats are the peak concurrency, not the overlap count', () => {
+    const snapshot = snapshotWithBooking( 2, [
+      {
+        id: IDS.booking,
+        start: '2026-09-08T12:00:00.000Z',
+        end: '2026-09-08T13:00:00.000Z',
+      },
+      {
+        id: BOOKING_B,
+        start: '2026-09-08T14:00:00.000Z',
+        end: '2026-09-08T15:00:00.000Z',
+      },
+    ] );
+    // Two existing bookings overlap the candidate but never each
+    // other, so at most 1 + the candidate = 2 seats are ever in use.
+    const result = checkBooking(
+      snapshot,
+      seat( '2026-09-08T12:30:00.000Z', '2026-09-08T14:30:00.000Z' ),
+    );
+    expect( result ).toEqual( {
+      ok: true,
+      value: { conflicts: [], remainingCapacity: 0 },
+    } );
+  } );
+} );
+
+describe( 'attendee conflicts', () => {
+  const capacityEvent = eventOn( IDS.teacherCal, {
+    occupancy: { kind: 'capacity', max: 5 },
+  } );
+
+  /** School tree plus a student entity so attendee ids resolve. */
+  function withStudent(
+    snapshot: ReturnType<typeof schoolTreeSnapshot>,
+  ): ReturnType<typeof schoolTreeSnapshot> {
+    snapshot.entities.push( {
+      id: IDS.student,
+      entityType: 'student',
+      name: 'Student',
+      parentId: IDS.section,
+      createdAt: NOW,
+      updatedAt: NOW,
+    } );
+    return snapshot;
+  }
+
+  function held(
+    id: string,
+    overrides: Partial<Booking> = {},
+  ): Booking {
+    return {
+      id,
+      calendarId: IDS.teacherCal,
+      eventId: IDS.event,
+      attendeeId: IDS.student,
+      ...AT_13_14,
+      createdAt: NOW,
+      updatedAt: NOW,
+      ...overrides,
+    };
+  }
+
+  test( 'same attendee cannot take a second seat on one occurrence', () => {
+    const snapshot = withStudent( teacherSnapshot( {
+      events: [ capacityEvent ],
+      bookings: [ held( IDS.booking ) ],
+    } ) );
+    const result = checkBooking( snapshot, {
+      id: BOOKING_B,
+      calendarId: IDS.teacherCal,
+      eventId: IDS.event,
+      attendeeId: IDS.student,
+      ...AT_13_14,
+    } );
+    expect( result.ok ).toBe( true );
+    if ( result.ok ) {
+      expect( result.value.conflicts ).toEqual( [ {
+        kind: 'attendee-conflict',
+        calendarId: IDS.teacherCal,
+        ...AT_13_14,
+        source: { type: 'booking', id: IDS.booking },
+      } ] );
+    }
+  } );
+
+  test( 'attendee double-booked on another calendar is reported', () => {
+    const snapshot = withStudent( teacherSnapshot( {
+      events: [ capacityEvent ],
+      bookings: [ held( IDS.booking, {
+        calendarId: IDS.sectionCal,
+        eventId: undefined,
+      } ) ],
+    } ) );
+    const result = checkBooking( snapshot, {
+      id: BOOKING_B,
+      calendarId: IDS.teacherCal,
+      eventId: IDS.event,
+      attendeeId: IDS.student,
+      ...AT_13_14,
+    } );
+    expect(
+      result.ok && result.value.conflicts.map( ( row ) => row.kind ),
+    ).toContain( 'attendee-conflict' );
+  } );
+
+  test( 'different attendee, adjacent time, and self do not conflict', () => {
+    const snapshot = withStudent( teacherSnapshot( {
+      events: [ capacityEvent ],
+      bookings: [ held( IDS.booking ) ],
+    } ) );
+    const other = checkBooking( snapshot, {
+      id: BOOKING_B,
+      calendarId: IDS.teacherCal,
+      eventId: IDS.event,
+      attendeeId: IDS.teacher,
+      ...AT_13_14,
+    } );
+    expect( other.ok && other.value.conflicts ).toEqual( [] );
+    const self = checkBooking( snapshot, held( IDS.booking ) );
+    expect( self.ok && self.value.conflicts ).toEqual( [] );
+  } );
+} );

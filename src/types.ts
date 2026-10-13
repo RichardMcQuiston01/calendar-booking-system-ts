@@ -102,6 +102,13 @@ export interface AvailabilityRule {
   calendarId: Uuid;
   startTime: ClockTime;
   endTime: ClockTime;
+  /**
+   * First civil date (in the calendar zone) the rule can apply to,
+   * and the phase anchor for `interval` and `count`. Required when
+   * `recurrence.interval > 1` or `recurrence.count` is set; otherwise
+   * expansion starts at the query range.
+   */
+  startDate?: DateOnly;
   recurrence: RecurrenceRule;
   excludedDates?: DateOnly[];
   createdAt: Instant;
@@ -163,7 +170,8 @@ export interface Conflict {
     | 'inherited-block'
     | 'capacity-full'
     | 'outside-availability'
-    | 'outside-target';
+    | 'outside-target'
+    | 'attendee-conflict';
   calendarId: Uuid;
   start: Instant;
   end: Instant;
