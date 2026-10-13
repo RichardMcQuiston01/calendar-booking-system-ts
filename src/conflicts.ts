@@ -23,7 +23,6 @@ import type {
   Instant,
   Occupancy,
   Occurrence,
-  RecurrenceRule,
   Result,
   SlotInput,
   TimeRange,
@@ -85,52 +84,87 @@ function addUtcYears( date: Date, years: number ): Date {
  */
 const MAX_HORIZON_MS = Date.UTC( 9998, 0, 1 );
 
-function countHorizonStart(
-  startAt: Date,
-  rule: RecurrenceRule,
-  count: number,
-): Date {
-  const interval = rule.interval ?? 1;
-  const steps = Math.max( 0, count - 1 ) * interval;
-  let horizonMs: number;
-  if ( rule.freq === 'daily' ) {
-    horizonMs = startAt.getTime() + steps * DAY_MS;
-  } else if ( rule.freq === 'weekly' ) {
-    horizonMs = startAt.getTime() + steps * 7 * DAY_MS;
-  } else {
-    horizonMs = addUtcYears( startAt, steps ).getTime();
+/**
+ * End of the last occurrence of a `count`-bounded series, found by
+ * expanding the series itself so `byDay` and skipped civil dates are
+ * honored. `undefined` when expansion fails or yields nothing.
+ */
+function countedSeriesEnd(
+  event: CalendarEvent,
+  zone: string,
+): number | undefined {
+  const expanded = expandRecurrence(
+    event,
+    {
+      start: event.start,
+      end: toInstant( new Date( MAX_HORIZON_MS ) ),
+    },
+    zone,
+  );
+  if ( !expanded.ok ) {
+    return undefined;
   }
-  // An unrepresentable horizon would make toISOString throw.
-  if ( !Number.isFinite( horizonMs ) || horizonMs > MAX_HORIZON_MS ) {
-    horizonMs = MAX_HORIZON_MS;
-  }
-  return new Date( horizonMs );
+  const last = expanded.value[ expanded.value.length - 1 ];
+  return last === undefined ? undefined : Date.parse( last.end );
 }
 
 /**
- * Conflict window for an event: prototype ±1 day, or the series
- * bound when the event recurs (`until`, `count`, else one year).
+ * Latest instant a finite series reaches: its `until` plus one
+ * occurrence, its `count`-th occurrence, or one year when unbounded.
  */
-function eventConflictRange( record: CalendarEvent ): TimeRange {
-  if ( record.recurrence === undefined ) {
-    return paddedRange( record.start, record.end );
-  }
+function seriesEnd( record: CalendarEvent, zone: string ): number {
   const startAt = parseInstant( record.start ) ?? new Date( 0 );
   const endAt = parseInstant( record.end ) ?? startAt;
   const duration = Math.max( 0, endAt.getTime() - startAt.getTime() );
   const rule = record.recurrence;
-  let boundEnd = endAt.getTime();
+  if ( rule === undefined ) {
+    return endAt.getTime();
+  }
   if ( rule.until !== undefined ) {
     const untilAt = parseInstant( rule.until ) ?? startAt;
-    boundEnd = Math.max( boundEnd, untilAt.getTime() + duration );
-  } else if ( rule.count !== undefined ) {
-    const lastStart = countHorizonStart( startAt, rule, rule.count );
-    boundEnd = Math.max( boundEnd, lastStart.getTime() + duration );
-  } else {
-    boundEnd = Math.max(
-      boundEnd,
-      addUtcYears( startAt, 1 ).getTime() + duration,
+    return Math.max( endAt.getTime(), untilAt.getTime() + duration );
+  }
+  if ( rule.count !== undefined ) {
+    return Math.max(
+      endAt.getTime(),
+      countedSeriesEnd( record, zone ) ?? endAt.getTime(),
     );
+  }
+  return Math.max(
+    endAt.getTime(),
+    addUtcYears( startAt, 1 ).getTime() + duration,
+  );
+}
+
+/**
+ * Conflict window for an event: prototype ±1 day, or the series
+ * bound when the event recurs (`until`, `count`). An unbounded series
+ * is scanned through the latest instant any other event, slot, or
+ * booking in the snapshot reaches (at least one year), so a later
+ * occurrence cannot double-book silently.
+ */
+function eventConflictRange(
+  record: CalendarEvent,
+  zone: string,
+  others: CalendarSnapshot,
+): TimeRange {
+  if ( record.recurrence === undefined ) {
+    return paddedRange( record.start, record.end );
+  }
+  let boundEnd = seriesEnd( record, zone );
+  const unbounded =
+    record.recurrence.until === undefined &&
+    record.recurrence.count === undefined;
+  if ( unbounded ) {
+    for ( const event of others.events ) {
+      boundEnd = Math.max(
+        boundEnd,
+        seriesEnd( event, event.timeZone ?? zone ),
+      );
+    }
+    for ( const row of [ ...others.slots, ...others.bookings ] ) {
+      boundEnd = Math.max( boundEnd, Date.parse( row.end ) );
+    }
   }
   boundEnd = Math.min( boundEnd, MAX_HORIZON_MS );
   return paddedRange( record.start, toInstant( new Date( boundEnd ) ) );
@@ -427,18 +461,15 @@ function collectEventConflicts(
   if ( calendar === undefined ) {
     return notFound( 'calendar', record.calendarId );
   }
-  const range = eventConflictRange( record );
-  const expanded = expandRecurrence(
-    record,
-    range,
-    record.timeZone ?? calendar.timeZone,
-  );
-  if ( !expanded.ok ) {
-    return expanded;
-  }
   const filtered = snapshotExcluding( snapshot, {
     eventId: record.id,
   } );
+  const zone = record.timeZone ?? calendar.timeZone;
+  const range = eventConflictRange( record, zone, filtered );
+  const expanded = expandRecurrence( record, range, zone );
+  if ( !expanded.ok ) {
+    return expanded;
+  }
   const own = ownExclusiveBusy( filtered, record.calendarId, range );
   if ( !own.ok ) {
     return own;

@@ -480,3 +480,50 @@ describe( 'hostile recurrence limits', () => {
     expect( result.ok ).toBe( true );
   } );
 } );
+
+describe( 'checkEvent conflict horizon', () => {
+  test( 'count 1 with byDay MO from a Friday prototype hits Monday', () => {
+    const snapshot = teacherSnapshot( {
+      events: [
+        eventOn( IDS.teacherCal, {
+          start: '2026-09-14T13:00:00.000Z',
+          end: '2026-09-14T14:00:00.000Z',
+        } ),
+      ],
+    } );
+    const result = checkEvent(
+      snapshot,
+      eventInput( {
+        start: '2026-09-11T13:00:00.000Z',
+        end: '2026-09-11T14:00:00.000Z',
+        recurrence: { freq: 'weekly', byDay: [ 'MO' ], count: 1 },
+      } ),
+    );
+    expect( result.ok ).toBe( true );
+    if ( result.ok ) {
+      expect( result.value.conflicts ).toHaveLength( 1 );
+      expect( result.value.conflicts[ 0 ]?.kind ).toBe(
+        'exclusive-overlap',
+      );
+    }
+  } );
+
+  test( 'unbounded weekly series sees an event past one year', () => {
+    const snapshot = teacherSnapshot( {
+      events: [
+        eventOn( IDS.teacherCal, {
+          start: '2027-09-14T13:00:00.000Z',
+          end: '2027-09-14T14:00:00.000Z',
+        } ),
+      ],
+    } );
+    const result = checkEvent(
+      snapshot,
+      eventInput( { recurrence: { freq: 'weekly' } } ),
+    );
+    expect( result.ok ).toBe( true );
+    if ( result.ok ) {
+      expect( result.value.conflicts.length ).toBeGreaterThan( 0 );
+    }
+  } );
+} );
