@@ -1,13 +1,19 @@
-import {
-  inheritsBlocks,
-  parentCalendarId,
-} from './hierarchy.js';
+import { inheritsBlocksIn, parentOf } from './hierarchy.js';
 import { normalizeUuid } from './ids.js';
+import {
+  bookingsOn,
+  buildSnapshotIndex,
+  calendarIn,
+  eventsOn,
+  rangeError,
+  slotsOf,
+  sortedCopy,
+  type SnapshotIndex,
+} from './lookup.js';
 import { expandRecurrence } from './recurrence.js';
-import { err, ok } from './result.js';
+import { ok } from './result.js';
 import { overlaps, rangeProblem } from './time.js';
 import type {
-  Calendar,
   CalendarSnapshot,
   Occurrence,
   Result,
@@ -17,39 +23,22 @@ import type {
 } from './types.js';
 import { validateSnapshot } from './validate.js';
 
-function rangeError( message: string ): Result<never> {
-  return err( { code: 'range', message } );
-}
-
-function calendarOf(
-  snapshot: CalendarSnapshot,
-  calendarId: Uuid,
-): Calendar | undefined {
-  const key = normalizeUuid( calendarId );
-  return snapshot.calendars.find(
-    ( row ) => normalizeUuid( row.id ) === key,
-  );
-}
-
-function sortOccurrences( occurrences: Occurrence[] ): Occurrence[] {
-  return occurrences.sort( ( a, b ) => {
+/** Copy of `occurrences` sorted by start then end. */
+export function sortOccurrences( occurrences: Occurrence[] ): Occurrence[] {
+  return sortedCopy( occurrences, ( a, b ) => {
     const start = a.start.localeCompare( b.start );
     return start !== 0 ? start : a.end.localeCompare( b.end );
   } );
 }
 
 function expandEventsOn(
-  snapshot: CalendarSnapshot,
+  index: SnapshotIndex,
   calendarId: Uuid,
   range: TimeRange,
   timeZone: TimeZone,
 ): Result<Occurrence[]> {
-  const key = normalizeUuid( calendarId );
   const occurrences: Occurrence[] = [];
-  for ( const event of snapshot.events ) {
-    if ( normalizeUuid( event.calendarId ) !== key ) {
-      continue;
-    }
+  for ( const event of eventsOn( index, calendarId ) ) {
     const expanded = expandRecurrence( event, range, timeZone );
     if ( !expanded.ok ) {
       return expanded;
@@ -60,16 +49,12 @@ function expandEventsOn(
 }
 
 function adHocOn(
-  snapshot: CalendarSnapshot,
+  index: SnapshotIndex,
   calendarId: Uuid,
   range: TimeRange,
 ): Occurrence[] {
-  const key = normalizeUuid( calendarId );
   const occurrences: Occurrence[] = [];
-  for ( const booking of snapshot.bookings ) {
-    if ( normalizeUuid( booking.calendarId ) !== key ) {
-      continue;
-    }
+  for ( const booking of bookingsOn( index, calendarId ) ) {
     if (
       booking.eventId !== undefined ||
       booking.slotId !== undefined
@@ -85,16 +70,12 @@ function adHocOn(
 }
 
 function slotsOn(
-  snapshot: CalendarSnapshot,
+  index: SnapshotIndex,
   calendarId: Uuid,
   range: TimeRange,
 ): Occurrence[] {
-  const key = normalizeUuid( calendarId );
   const occurrences: Occurrence[] = [];
-  for ( const slot of snapshot.slots ) {
-    if ( normalizeUuid( slot.calendarId ) !== key ) {
-      continue;
-    }
+  for ( const slot of slotsOf( index, calendarId ) ) {
     const occ = { start: slot.start, end: slot.end };
     if ( overlaps( occ, range ) ) {
       occurrences.push( occ );
@@ -104,60 +85,103 @@ function slotsOn(
 }
 
 function eventsAndAdHoc(
-  snapshot: CalendarSnapshot,
+  index: SnapshotIndex,
   calendarId: Uuid,
   range: TimeRange,
 ): Result<Occurrence[]> {
-  const calendar = calendarOf( snapshot, calendarId );
-  const timeZone = calendar?.timeZone ?? 'UTC';
-  const events = expandEventsOn(
-    snapshot,
-    calendarId,
-    range,
-    timeZone,
-  );
+  const timeZone = calendarIn( index, calendarId )?.timeZone ?? 'UTC';
+  const events = expandEventsOn( index, calendarId, range, timeZone );
   if ( !events.ok ) {
     return events;
   }
-  return ok( [ ...events.value, ...adHocOn( snapshot, calendarId, range ) ] );
+  return ok( [ ...events.value, ...adHocOn( index, calendarId, range ) ] );
 }
 
-function ownBusyUnchecked(
-  snapshot: CalendarSnapshot,
+/**
+ * Own exclusive busy, unsorted. Internal: the snapshot behind `index`
+ * must already be validated and `range` checked.
+ */
+export function ownBusyIn(
+  index: SnapshotIndex,
   calendarId: Uuid,
   range: TimeRange,
 ): Result<Occurrence[]> {
-  const own = eventsAndAdHoc( snapshot, calendarId, range );
+  const own = eventsAndAdHoc( index, calendarId, range );
   if ( !own.ok ) {
     return own;
   }
   return ok( [
     ...own.value,
-    ...slotsOn( snapshot, calendarId, range ),
+    ...slotsOn( index, calendarId, range ),
   ] );
 }
 
-function inheritedUnchecked(
-  snapshot: CalendarSnapshot,
+/**
+ * Inherited ancestor blocks, unsorted. Internal: the snapshot behind
+ * `index` must already be validated and `range` checked.
+ */
+export function inheritedIn(
+  index: SnapshotIndex,
   calendarId: Uuid,
   range: TimeRange,
 ): Result<Occurrence[]> {
-  if ( !inheritsBlocks( snapshot, calendarId ) ) {
-    return ok( [] );
+  const blocks: Occurrence[] = [];
+  let current = calendarId;
+  const seen = new Set<string>();
+  while ( inheritsBlocksIn( index.hierarchy, current ) ) {
+    const parent = parentOf( index.hierarchy, current );
+    if ( parent === undefined ) {
+      break;
+    }
+    const key = normalizeUuid( parent );
+    if ( seen.has( key ) ) {
+      break;
+    }
+    seen.add( key );
+    const parentOwn = eventsAndAdHoc( index, parent, range );
+    if ( !parentOwn.ok ) {
+      return parentOwn;
+    }
+    blocks.push( ...parentOwn.value );
+    current = parent;
   }
-  const parent = parentCalendarId( snapshot, calendarId );
-  if ( parent === undefined ) {
-    return ok( [] );
+  return ok( blocks );
+}
+
+/**
+ * Own busy union inherited blocks, sorted. Internal: the snapshot
+ * behind `index` must already be validated and `range` checked.
+ */
+export function effectiveBusyIn(
+  index: SnapshotIndex,
+  calendarId: Uuid,
+  range: TimeRange,
+): Result<Occurrence[]> {
+  const own = ownBusyIn( index, calendarId, range );
+  if ( !own.ok ) {
+    return own;
   }
-  const parentOwn = eventsAndAdHoc( snapshot, parent, range );
-  if ( !parentOwn.ok ) {
-    return parentOwn;
+  const inherited = inheritedIn( index, calendarId, range );
+  if ( !inherited.ok ) {
+    return inherited;
   }
-  const parentInherited = inheritedUnchecked( snapshot, parent, range );
-  if ( !parentInherited.ok ) {
-    return parentInherited;
+  return ok( sortOccurrences( [ ...own.value, ...inherited.value ] ) );
+}
+
+/** Validates the snapshot and range once; returns the index. */
+function prepare(
+  snapshot: CalendarSnapshot,
+  range: TimeRange,
+): Result<SnapshotIndex> {
+  const validated = validateSnapshot( snapshot );
+  if ( !validated.ok ) {
+    return validated;
   }
-  return ok( [ ...parentOwn.value, ...parentInherited.value ] );
+  const problem = rangeProblem( range );
+  if ( problem !== undefined ) {
+    return rangeError( problem );
+  }
+  return ok( buildSnapshotIndex( snapshot ) );
 }
 
 /**
@@ -170,15 +194,11 @@ export function ownExclusiveBusy(
   calendarId: Uuid,
   range: TimeRange,
 ): Result<Occurrence[]> {
-  const validated = validateSnapshot( snapshot );
-  if ( !validated.ok ) {
-    return validated;
+  const index = prepare( snapshot, range );
+  if ( !index.ok ) {
+    return index;
   }
-  const problem = rangeProblem( range );
-  if ( problem !== undefined ) {
-    return rangeError( problem );
-  }
-  const own = ownBusyUnchecked( snapshot, calendarId, range );
+  const own = ownBusyIn( index.value, calendarId, range );
   if ( !own.ok ) {
     return own;
   }
@@ -196,15 +216,11 @@ export function inheritedBlocks(
   calendarId: Uuid,
   range: TimeRange,
 ): Result<Occurrence[]> {
-  const validated = validateSnapshot( snapshot );
-  if ( !validated.ok ) {
-    return validated;
+  const index = prepare( snapshot, range );
+  if ( !index.ok ) {
+    return index;
   }
-  const problem = rangeProblem( range );
-  if ( problem !== undefined ) {
-    return rangeError( problem );
-  }
-  const inherited = inheritedUnchecked( snapshot, calendarId, range );
+  const inherited = inheritedIn( index.value, calendarId, range );
   if ( !inherited.ok ) {
     return inherited;
   }
@@ -220,13 +236,9 @@ export function effectiveExclusiveBusy(
   calendarId: Uuid,
   range: TimeRange,
 ): Result<Occurrence[]> {
-  const own = ownExclusiveBusy( snapshot, calendarId, range );
-  if ( !own.ok ) {
-    return own;
+  const index = prepare( snapshot, range );
+  if ( !index.ok ) {
+    return index;
   }
-  const inherited = inheritedBlocks( snapshot, calendarId, range );
-  if ( !inherited.ok ) {
-    return inherited;
-  }
-  return ok( sortOccurrences( [ ...own.value, ...inherited.value ] ) );
+  return effectiveBusyIn( index.value, calendarId, range );
 }

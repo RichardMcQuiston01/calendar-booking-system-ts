@@ -7,6 +7,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- Internal refactor, no behavior change and no public signature change.
+  Each public call now validates its snapshot once and builds one lookup
+  index (id maps, per-calendar rows, parent links) that it passes down,
+  instead of re-indexing the hierarchy and re-validating an unchanged
+  snapshot at every layer. On a 150-level org tree `queryView` is about
+  2.5× (root) to 5× (leaf) faster and `checkBooking` about 7× faster;
+  outputs are byte-identical to 0.2.0 on that tree (#28)
+- `parentCalendarId`, `ancestorCalendarIds`, `descendantCalendarIds`,
+  `inheritsBlocks`, and `rollsUpTo` are documented (and in spec §7.2) as
+  trusting their snapshot: they do not call `validateSnapshot`.
+  `requiredCalendarIds` still does
+- Occurrence and view-item sorts now sort a copy, matching the
+  immutability rule in `src/snapshot.ts`
+
 ## [0.2.0] - 2026-10-13
 
 Behavior-tightening release. Several inputs that were silently

@@ -1,12 +1,18 @@
 import {
-  checkBooking,
-  checkEvent,
-  checkSlot,
+  checkBookingTrusted,
+  checkEventTrusted,
+  checkSlotTrusted,
 } from './conflicts.js';
 import { isUuid, normalizeUuid } from './ids.js';
+import {
+  findIndexById as findIndex,
+  nowOf,
+  notFound,
+  requireCalendar,
+} from './lookup.js';
 import { err, ok } from './result.js';
 import { cloneSnapshot, copyRecord, stamp } from './snapshot.js';
-import { isValidDateOnly, nowInstant } from './time.js';
+import { isValidDateOnly } from './time.js';
 import type {
   ApplyOptions,
   ApplySuccess,
@@ -29,32 +35,12 @@ import { validateSnapshot } from './validate.js';
 
 const DEFAULT_OCCUPANCY: Occupancy = { kind: 'exclusive' };
 
-function notFound( kind: string, id: Uuid ): Result<never> {
-  return err( {
-    code: 'not_found',
-    message: `${ kind } not found`,
-    details: { id },
-  } );
-}
-
 function alreadyExists( kind: string, id: Uuid ): Result<never> {
   return err( {
     code: 'validation',
     message: `${ kind } already exists`,
     details: { id },
   } );
-}
-
-function findIndex(
-  rows: { id: Uuid }[],
-  id: Uuid,
-): number {
-  const key = normalizeUuid( id );
-  return rows.findIndex( ( row ) => normalizeUuid( row.id ) === key );
-}
-
-function nowOf( opts?: ApplyOptions ): string {
-  return opts?.now ?? nowInstant();
 }
 
 function refuseConflicts(
@@ -156,27 +142,6 @@ function requireId(
   return ok( true );
 }
 
-function requireCalendar(
-  snapshot: CalendarSnapshot,
-  calendarId: Uuid,
-): Result<true> {
-  if ( !isUuid( calendarId ) ) {
-    return err( {
-      code: 'validation',
-      message: 'calendarId is not a UUID',
-      details: { calendarId },
-    } );
-  }
-  const key = normalizeUuid( calendarId );
-  const found = snapshot.calendars.some(
-    ( row ) => normalizeUuid( row.id ) === key,
-  );
-  if ( !found ) {
-    return notFound( 'calendar', calendarId );
-  }
-  return ok( true );
-}
-
 /**
  * Insert an event. Existing ids are rejected; use `updateEvent`.
  */
@@ -192,7 +157,7 @@ export function applyEvent(
   if ( isUuid( input.id ) && findIndex( snapshot.events, input.id ) >= 0 ) {
     return alreadyExists( 'event', input.id );
   }
-  const checked = checkEvent( snapshot, input );
+  const checked = checkEventTrusted( snapshot, input );
   if ( !checked.ok ) {
     return checked;
   }
@@ -230,7 +195,7 @@ export function updateEvent(
   if ( index < 0 ) {
     return notFound( 'event', input.id );
   }
-  const checked = checkEvent( snapshot, input );
+  const checked = checkEventTrusted( snapshot, input );
   if ( !checked.ok ) {
     return checked;
   }
@@ -430,7 +395,7 @@ export function applySlot(
   if ( isUuid( input.id ) && findIndex( snapshot.slots, input.id ) >= 0 ) {
     return alreadyExists( 'slot', input.id );
   }
-  const checked = checkSlot( snapshot, input );
+  const checked = checkSlotTrusted( snapshot, input );
   if ( !checked.ok ) {
     return checked;
   }
@@ -468,7 +433,7 @@ export function updateSlot(
   if ( index < 0 ) {
     return notFound( 'slot', input.id );
   }
-  const checked = checkSlot( snapshot, input );
+  const checked = checkSlotTrusted( snapshot, input );
   if ( !checked.ok ) {
     return checked;
   }
@@ -537,7 +502,7 @@ export function applyBooking(
   ) {
     return alreadyExists( 'booking', input.id );
   }
-  const checked = checkBooking( snapshot, input );
+  const checked = checkBookingTrusted( snapshot, input );
   if ( !checked.ok ) {
     return checked;
   }
@@ -575,7 +540,7 @@ export function updateBooking(
   if ( index < 0 ) {
     return notFound( 'booking', input.id );
   }
-  const checked = checkBooking( snapshot, input );
+  const checked = checkBookingTrusted( snapshot, input );
   if ( !checked.ok ) {
     return checked;
   }

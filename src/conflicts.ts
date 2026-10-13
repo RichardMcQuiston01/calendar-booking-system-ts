@@ -1,12 +1,21 @@
-import { openAvailability } from './availability.js';
-import {
-  inheritsBlocks,
-  parentCalendarId,
-} from './hierarchy.js';
+import { openAvailabilityIn } from './availability.js';
+import { inheritsBlocksIn, parentOf } from './hierarchy.js';
 import { isUuid, normalizeUuid } from './ids.js';
 import {
-  inheritedBlocks,
-  ownExclusiveBusy,
+  bookingsOn,
+  buildSnapshotIndex,
+  calendarIn,
+  eventsOn,
+  findById,
+  notFound,
+  requireCalendar,
+  slotsOf,
+  type SnapshotIndex,
+} from './lookup.js';
+import {
+  inheritedIn,
+  ownBusyIn,
+  sortOccurrences,
 } from './occupancy.js';
 import { expandRecurrence } from './recurrence.js';
 import { err, ok } from './result.js';
@@ -35,29 +44,6 @@ const COMMAND_STAMP = '1970-01-01T00:00:00.000Z';
 const DEFAULT_OCCUPANCY: Occupancy = { kind: 'exclusive' };
 
 const DAY_MS = 24 * 60 * 60 * 1000;
-
-function notFound( kind: string, id: Uuid ): Result<never> {
-  return err( {
-    code: 'not_found',
-    message: `${ kind } not found`,
-    details: { id },
-  } );
-}
-
-function findById<T extends { id: Uuid }>(
-  rows: T[],
-  id: Uuid,
-): T | undefined {
-  const key = normalizeUuid( id );
-  return rows.find( ( row ) => normalizeUuid( row.id ) === key );
-}
-
-function calendarOf(
-  snapshot: CalendarSnapshot,
-  calendarId: Uuid,
-) {
-  return findById( snapshot.calendars, calendarId );
-}
 
 function paddedRange( start: Instant, end: Instant ): TimeRange {
   const startAt = parseInstant( start );
@@ -293,18 +279,13 @@ function previewOk(
 }
 
 function matchEventSource(
-  snapshot: CalendarSnapshot,
+  index: SnapshotIndex,
   calendarId: Uuid,
   interval: Occurrence,
   range: TimeRange,
 ): Conflict['source'] | undefined {
-  const key = normalizeUuid( calendarId );
-  const calendar = calendarOf( snapshot, calendarId );
-  const zone = calendar?.timeZone ?? 'UTC';
-  for ( const event of snapshot.events ) {
-    if ( normalizeUuid( event.calendarId ) !== key ) {
-      continue;
-    }
+  const zone = calendarIn( index, calendarId )?.timeZone ?? 'UTC';
+  for ( const event of eventsOn( index, calendarId ) ) {
     const expanded = expandRecurrence(
       event,
       range,
@@ -325,39 +306,17 @@ function matchEventSource(
   return undefined;
 }
 
-function matchOwnSource(
-  snapshot: CalendarSnapshot,
+function isAdHoc( booking: Booking ): boolean {
+  return booking.eventId === undefined && booking.slotId === undefined;
+}
+
+function matchAdHocSource(
+  index: SnapshotIndex,
   calendarId: Uuid,
   interval: Occurrence,
-  range: TimeRange,
-): Conflict['source'] {
-  const event = matchEventSource(
-    snapshot,
-    calendarId,
-    interval,
-    range,
-  );
-  if ( event ) {
-    return event;
-  }
-  const key = normalizeUuid( calendarId );
-  for ( const slot of snapshot.slots ) {
-    if ( normalizeUuid( slot.calendarId ) !== key ) {
-      continue;
-    }
-    const occ = { start: slot.start, end: slot.end };
-    if ( sameInterval( occ, interval ) || overlaps( occ, interval ) ) {
-      return { type: 'slot', id: slot.id };
-    }
-  }
-  for ( const booking of snapshot.bookings ) {
-    if ( normalizeUuid( booking.calendarId ) !== key ) {
-      continue;
-    }
-    if (
-      booking.eventId !== undefined ||
-      booking.slotId !== undefined
-    ) {
+): Conflict['source'] | undefined {
+  for ( const booking of bookingsOn( index, calendarId ) ) {
+    if ( !isAdHoc( booking ) ) {
       continue;
     }
     const occ = { start: booking.start, end: booking.end };
@@ -365,48 +324,50 @@ function matchOwnSource(
       return { type: 'booking', id: booking.id };
     }
   }
-  return { type: 'availability' };
+  return undefined;
+}
+
+function matchOwnSource(
+  index: SnapshotIndex,
+  calendarId: Uuid,
+  interval: Occurrence,
+  range: TimeRange,
+): Conflict['source'] {
+  const event = matchEventSource( index, calendarId, interval, range );
+  if ( event ) {
+    return event;
+  }
+  for ( const slot of slotsOf( index, calendarId ) ) {
+    const occ = { start: slot.start, end: slot.end };
+    if ( sameInterval( occ, interval ) || overlaps( occ, interval ) ) {
+      return { type: 'slot', id: slot.id };
+    }
+  }
+  return (
+    matchAdHocSource( index, calendarId, interval ) ??
+    { type: 'availability' }
+  );
 }
 
 function matchInheritedSource(
-  snapshot: CalendarSnapshot,
+  index: SnapshotIndex,
   calendarId: Uuid,
   interval: Occurrence,
   range: TimeRange,
 ): Conflict['source'] {
   let current = calendarId;
-  while ( inheritsBlocks( snapshot, current ) ) {
-    const parent = parentCalendarId( snapshot, current );
+  while ( inheritsBlocksIn( index.hierarchy, current ) ) {
+    const parent = parentOf( index.hierarchy, current );
     if ( parent === undefined ) {
       break;
     }
-    const event = matchEventSource(
-      snapshot,
-      parent,
-      interval,
-      range,
-    );
+    const event = matchEventSource( index, parent, interval, range );
     if ( event ) {
       return event;
     }
-    const key = normalizeUuid( parent );
-    for ( const booking of snapshot.bookings ) {
-      if ( normalizeUuid( booking.calendarId ) !== key ) {
-        continue;
-      }
-      if (
-        booking.eventId !== undefined ||
-        booking.slotId !== undefined
-      ) {
-        continue;
-      }
-      const occ = { start: booking.start, end: booking.end };
-      if (
-        sameInterval( occ, interval ) ||
-        overlaps( occ, interval )
-      ) {
-        return { type: 'booking', id: booking.id };
-      }
+    const booking = matchAdHocSource( index, parent, interval );
+    if ( booking ) {
+      return booking;
     }
     current = parent;
   }
@@ -419,7 +380,7 @@ function pushBusyConflicts(
   occ: Occurrence,
   inherited: Occurrence[],
   own: Occurrence[],
-  snapshot: CalendarSnapshot,
+  index: SnapshotIndex,
   range: TimeRange,
 ): void {
   for ( const block of inherited ) {
@@ -431,12 +392,7 @@ function pushBusyConflicts(
       calendarId,
       start: block.start,
       end: block.end,
-      source: matchInheritedSource(
-        snapshot,
-        calendarId,
-        block,
-        range,
-      ),
+      source: matchInheritedSource( index, calendarId, block, range ),
     } );
   }
   for ( const busy of own ) {
@@ -448,16 +404,22 @@ function pushBusyConflicts(
       calendarId,
       start: busy.start,
       end: busy.end,
-      source: matchOwnSource( snapshot, calendarId, busy, range ),
+      source: matchOwnSource( index, calendarId, busy, range ),
     } );
   }
+}
+
+function sortedBusy(
+  result: Result<Occurrence[]>,
+): Result<Occurrence[]> {
+  return result.ok ? ok( sortOccurrences( result.value ) ) : result;
 }
 
 function collectEventConflicts(
   snapshot: CalendarSnapshot,
   record: CalendarEvent,
 ): Result<Conflict[]> {
-  const calendar = calendarOf( snapshot, record.calendarId );
+  const calendar = findById( snapshot.calendars, record.calendarId );
   if ( calendar === undefined ) {
     return notFound( 'calendar', record.calendarId );
   }
@@ -470,14 +432,13 @@ function collectEventConflicts(
   if ( !expanded.ok ) {
     return expanded;
   }
-  const own = ownExclusiveBusy( filtered, record.calendarId, range );
+  const index = buildSnapshotIndex( filtered );
+  const own = sortedBusy( ownBusyIn( index, record.calendarId, range ) );
   if ( !own.ok ) {
     return own;
   }
-  const inherited = inheritedBlocks(
-    filtered,
-    record.calendarId,
-    range,
+  const inherited = sortedBusy(
+    inheritedIn( index, record.calendarId, range ),
   );
   if ( !inherited.ok ) {
     return inherited;
@@ -490,7 +451,7 @@ function collectEventConflicts(
       occ,
       inherited.value,
       own.value,
-      filtered,
+      index,
       range,
     );
   }
@@ -501,21 +462,19 @@ function collectSlotConflicts(
   snapshot: CalendarSnapshot,
   record: BookableSlot,
 ): Result<Conflict[]> {
-  if ( calendarOf( snapshot, record.calendarId ) === undefined ) {
+  if ( findById( snapshot.calendars, record.calendarId ) === undefined ) {
     return notFound( 'calendar', record.calendarId );
   }
   const range = paddedRange( record.start, record.end );
-  const filtered = snapshotExcluding( snapshot, {
-    slotId: record.id,
-  } );
-  const own = ownExclusiveBusy( filtered, record.calendarId, range );
+  const index = buildSnapshotIndex(
+    snapshotExcluding( snapshot, { slotId: record.id } ),
+  );
+  const own = sortedBusy( ownBusyIn( index, record.calendarId, range ) );
   if ( !own.ok ) {
     return own;
   }
-  const inherited = inheritedBlocks(
-    filtered,
-    record.calendarId,
-    range,
+  const inherited = sortedBusy(
+    inheritedIn( index, record.calendarId, range ),
   );
   if ( !inherited.ok ) {
     return inherited;
@@ -527,7 +486,7 @@ function collectSlotConflicts(
     { start: record.start, end: record.end },
     inherited.value,
     own.value,
-    filtered,
+    index,
     range,
   );
   return ok( conflicts );
@@ -556,7 +515,7 @@ function collectEventSeat(
       details: { id: record.id },
     } );
   }
-  const calendar = calendarOf( snapshot, record.calendarId );
+  const calendar = findById( snapshot.calendars, record.calendarId );
   const zone = event.timeZone ?? calendar?.timeZone ?? 'UTC';
   const range = paddedRange( record.start, record.end );
   const expanded = expandRecurrence( event, range, zone );
@@ -705,10 +664,10 @@ function collectAdHoc(
   record: Booking,
 ): Result<CheckReport> {
   const range = paddedRange( record.start, record.end );
-  const filtered = snapshotExcluding( snapshot, {
-    bookingId: record.id,
-  } );
-  const open = openAvailability( filtered, record.calendarId, range );
+  const index = buildSnapshotIndex(
+    snapshotExcluding( snapshot, { bookingId: record.id } ),
+  );
+  const open = openAvailabilityIn( index, record.calendarId, range );
   if ( !open.ok ) {
     return open;
   }
@@ -723,14 +682,12 @@ function collectAdHoc(
       source: { type: 'availability' },
     } );
   }
-  const own = ownExclusiveBusy( filtered, record.calendarId, range );
+  const own = sortedBusy( ownBusyIn( index, record.calendarId, range ) );
   if ( !own.ok ) {
     return own;
   }
-  const inherited = inheritedBlocks(
-    filtered,
-    record.calendarId,
-    range,
+  const inherited = sortedBusy(
+    inheritedIn( index, record.calendarId, range ),
   );
   if ( !inherited.ok ) {
     return inherited;
@@ -741,7 +698,7 @@ function collectAdHoc(
     bookingOcc,
     inherited.value,
     own.value,
-    filtered,
+    index,
     range,
   );
   return ok( { conflicts } );
@@ -785,7 +742,7 @@ function collectBookingConflicts(
   snapshot: CalendarSnapshot,
   record: Booking,
 ): Result<CheckReport> {
-  if ( calendarOf( snapshot, record.calendarId ) === undefined ) {
+  if ( findById( snapshot.calendars, record.calendarId ) === undefined ) {
     return notFound( 'calendar', record.calendarId );
   }
   let report: Result<CheckReport>;
@@ -808,35 +765,14 @@ function collectBookingConflicts(
   } );
 }
 
-function requireCalendar(
-  snapshot: CalendarSnapshot,
-  calendarId: Uuid,
-): Result<true> {
-  if ( !isUuid( calendarId ) ) {
-    return err( {
-      code: 'validation',
-      message: 'calendarId is not a UUID',
-      details: { calendarId },
-    } );
-  }
-  if ( calendarOf( snapshot, calendarId ) === undefined ) {
-    return notFound( 'calendar', calendarId );
-  }
-  return ok( true );
-}
-
 /**
- * Preview occupancy conflicts for an event command.
- * Succeeds after validation even when `conflicts` is non-empty.
+ * `checkEvent` for a snapshot the caller has already validated.
+ * Internal: lets `apply*` / `update*` validate once, not per layer.
  */
-export function checkEvent(
+export function checkEventTrusted(
   snapshot: CalendarSnapshot,
   input: EventInput,
 ): Result<CheckReport> {
-  const validated = validateSnapshot( snapshot );
-  if ( !validated.ok ) {
-    return validated;
-  }
   if ( !isUuid( input.id ) ) {
     return err( {
       code: 'validation',
@@ -871,17 +807,28 @@ export function checkEvent(
 }
 
 /**
- * Preview occupancy conflicts for a slot command.
+ * Preview occupancy conflicts for an event command.
  * Succeeds after validation even when `conflicts` is non-empty.
  */
-export function checkSlot(
+export function checkEvent(
   snapshot: CalendarSnapshot,
-  input: SlotInput,
+  input: EventInput,
 ): Result<CheckReport> {
   const validated = validateSnapshot( snapshot );
   if ( !validated.ok ) {
     return validated;
   }
+  return checkEventTrusted( snapshot, input );
+}
+
+/**
+ * `checkSlot` for a snapshot the caller has already validated.
+ * Internal: lets `apply*` / `update*` validate once, not per layer.
+ */
+export function checkSlotTrusted(
+  snapshot: CalendarSnapshot,
+  input: SlotInput,
+): Result<CheckReport> {
   if ( !isUuid( input.id ) ) {
     return err( {
       code: 'validation',
@@ -910,18 +857,28 @@ export function checkSlot(
 }
 
 /**
- * Preview occupancy, capacity, and availability conflicts for a
- * booking command. Succeeds after validation even when conflicts
- * exist. `remainingCapacity` is set only for seat bookings.
+ * Preview occupancy conflicts for a slot command.
+ * Succeeds after validation even when `conflicts` is non-empty.
  */
-export function checkBooking(
+export function checkSlot(
   snapshot: CalendarSnapshot,
-  input: BookingInput,
+  input: SlotInput,
 ): Result<CheckReport> {
   const validated = validateSnapshot( snapshot );
   if ( !validated.ok ) {
     return validated;
   }
+  return checkSlotTrusted( snapshot, input );
+}
+
+/**
+ * `checkBooking` for a snapshot the caller has already validated.
+ * Internal: lets `apply*` / `update*` validate once, not per layer.
+ */
+export function checkBookingTrusted(
+  snapshot: CalendarSnapshot,
+  input: BookingInput,
+): Result<CheckReport> {
   if ( !isUuid( input.id ) ) {
     return err( {
       code: 'validation',
@@ -991,4 +948,20 @@ export function checkBooking(
     return preview;
   }
   return collectBookingConflicts( snapshot, record );
+}
+
+/**
+ * Preview occupancy, capacity, and availability conflicts for a
+ * booking command. Succeeds after validation even when conflicts
+ * exist. `remainingCapacity` is set only for seat bookings.
+ */
+export function checkBooking(
+  snapshot: CalendarSnapshot,
+  input: BookingInput,
+): Result<CheckReport> {
+  const validated = validateSnapshot( snapshot );
+  if ( !validated.ok ) {
+    return validated;
+  }
+  return checkBookingTrusted( snapshot, input );
 }
