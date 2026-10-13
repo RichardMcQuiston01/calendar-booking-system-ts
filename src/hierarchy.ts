@@ -9,15 +9,24 @@ import type {
 } from './types.js';
 import { validateSnapshot } from './validate.js';
 
-interface HierarchyIndex {
+/**
+ * Id maps and parent links for one snapshot. Built once per public
+ * call and passed down; `parentCache` memoizes the resolved parent
+ * calendar so repeated hops do not re-walk the entity tree.
+ */
+export interface HierarchyIndex {
   calendars: Map<string, Calendar>;
   entities: Map<string, Entity>;
   calendarIdByEntity: Map<string, Uuid>;
   entityIdByCalendar: Map<string, string>;
   childrenByEntity: Map<string, string[]>;
+  parentCache: Map<string, Uuid | null>;
 }
 
-function indexSnapshot( snapshot: CalendarSnapshot ): HierarchyIndex {
+/** Build the hierarchy index for `snapshot` (internal). */
+export function buildHierarchyIndex(
+  snapshot: CalendarSnapshot,
+): HierarchyIndex {
   const calendars = new Map<string, Calendar>();
   const entities = new Map<string, Entity>();
   const calendarIdByEntity = new Map<string, Uuid>();
@@ -57,6 +66,7 @@ function indexSnapshot( snapshot: CalendarSnapshot ): HierarchyIndex {
     calendarIdByEntity,
     entityIdByCalendar,
     childrenByEntity,
+    parentCache: new Map<string, Uuid | null>(),
   };
 }
 
@@ -81,20 +91,26 @@ function parentFromEntity(
   return undefined;
 }
 
-function parentOf(
+/** Resolved parent calendar of `calendarId` (internal, indexed). */
+export function parentOf(
   index: HierarchyIndex,
   calendarId: Uuid,
 ): Uuid | undefined {
-  const entityId = index.entityIdByCalendar.get(
-    normalizeUuid( calendarId ),
-  );
-  if ( entityId === undefined ) {
-    return undefined;
+  const key = normalizeUuid( calendarId );
+  const cached = index.parentCache.get( key );
+  if ( cached !== undefined ) {
+    return cached ?? undefined;
   }
-  return parentFromEntity( index, entityId );
+  const entityId = index.entityIdByCalendar.get( key );
+  const parent = entityId === undefined
+    ? undefined
+    : parentFromEntity( index, entityId );
+  index.parentCache.set( key, parent ?? null );
+  return parent;
 }
 
-function ancestorsOf(
+/** Ancestors nearest first (internal, indexed). */
+export function ancestorsOf(
   index: HierarchyIndex,
   calendarId: Uuid,
 ): Uuid[] {
@@ -117,7 +133,8 @@ function ancestorsOf(
   return ancestors;
 }
 
-function descendantsOf(
+/** Descendant calendars in breadth-first order (internal, indexed). */
+export function descendantsOf(
   index: HierarchyIndex,
   calendarId: Uuid,
 ): Uuid[] {
@@ -158,32 +175,35 @@ function canRollUp( inheritance: Calendar['inheritance'] ): boolean {
 /**
  * Resolved parent calendar of `calendarId`, walking the entity tree.
  * Entities with no calendar link are skipped.
+ * Trusts `snapshot`: it does not call `validateSnapshot`.
  */
 export function parentCalendarId(
   snapshot: CalendarSnapshot,
   calendarId: Uuid,
 ): Uuid | undefined {
-  return parentOf( indexSnapshot( snapshot ), calendarId );
+  return parentOf( buildHierarchyIndex( snapshot ), calendarId );
 }
 
 /**
  * Parent calendars of `calendarId` from nearest ancestor to the root.
+ * Trusts `snapshot`: it does not call `validateSnapshot`.
  */
 export function ancestorCalendarIds(
   snapshot: CalendarSnapshot,
   calendarId: Uuid,
 ): Uuid[] {
-  return ancestorsOf( indexSnapshot( snapshot ), calendarId );
+  return ancestorsOf( buildHierarchyIndex( snapshot ), calendarId );
 }
 
 /**
  * Calendars on descendant entities of `calendarId`'s linked entity.
+ * Trusts `snapshot`: it does not call `validateSnapshot`.
  */
 export function descendantCalendarIds(
   snapshot: CalendarSnapshot,
   calendarId: Uuid,
 ): Uuid[] {
-  return descendantsOf( indexSnapshot( snapshot ), calendarId );
+  return descendantsOf( buildHierarchyIndex( snapshot ), calendarId );
 }
 
 /**
@@ -211,8 +231,9 @@ export function requiredCalendarIds(
     } );
   }
 
-  const ancestors = ancestorCalendarIds( snapshot, calendar.id );
-  const descendants = descendantCalendarIds( snapshot, calendar.id );
+  const index = buildHierarchyIndex( snapshot );
+  const ancestors = ancestorsOf( index, calendar.id );
+  const descendants = descendantsOf( index, calendar.id );
   const seen = new Set<string>();
   const ids: Uuid[] = [];
   for ( const id of [ calendar.id, ...ancestors, ...descendants ] ) {
@@ -226,32 +247,24 @@ export function requiredCalendarIds(
   return ok( ids );
 }
 
-/**
- * True when this calendar inherits exclusive blocks from its parent.
- */
-export function inheritsBlocks(
-  snapshot: CalendarSnapshot,
+/** True when `calendarId` inherits parent blocks (internal, indexed). */
+export function inheritsBlocksIn(
+  index: HierarchyIndex,
   calendarId: Uuid,
 ): boolean {
-  const calendar = indexSnapshot( snapshot ).calendars.get(
-    normalizeUuid( calendarId ),
-  );
+  const calendar = index.calendars.get( normalizeUuid( calendarId ) );
   return (
     calendar?.inheritance === 'inherit-blocks' ||
     calendar?.inheritance === 'both'
   );
 }
 
-/**
- * True when every calendar from D up to but not including A has
- * inheritance `roll-up` or `both`.
- */
-export function rollsUpTo(
-  snapshot: CalendarSnapshot,
+/** Roll-up path check (internal, indexed). */
+export function rollsUpToIn(
+  index: HierarchyIndex,
   descendantCalendarId: Uuid,
   ancestorCalendarId: Uuid,
 ): boolean {
-  const index = indexSnapshot( snapshot );
   const ancestorKey = normalizeUuid( ancestorCalendarId );
   const descendantKey = normalizeUuid( descendantCalendarId );
   if ( descendantKey === ancestorKey ) {
@@ -278,4 +291,32 @@ export function rollsUpTo(
     const calendar = index.calendars.get( normalizeUuid( id ) );
     return calendar !== undefined && canRollUp( calendar.inheritance );
   } );
+}
+
+/**
+ * True when this calendar inherits exclusive blocks from its parent.
+ * Trusts `snapshot`: it does not call `validateSnapshot`.
+ */
+export function inheritsBlocks(
+  snapshot: CalendarSnapshot,
+  calendarId: Uuid,
+): boolean {
+  return inheritsBlocksIn( buildHierarchyIndex( snapshot ), calendarId );
+}
+
+/**
+ * True when every calendar from D up to but not including A has
+ * inheritance `roll-up` or `both`.
+ * Trusts `snapshot`: it does not call `validateSnapshot`.
+ */
+export function rollsUpTo(
+  snapshot: CalendarSnapshot,
+  descendantCalendarId: Uuid,
+  ancestorCalendarId: Uuid,
+): boolean {
+  return rollsUpToIn(
+    buildHierarchyIndex( snapshot ),
+    descendantCalendarId,
+    ancestorCalendarId,
+  );
 }

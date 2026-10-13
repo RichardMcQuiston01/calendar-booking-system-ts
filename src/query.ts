@@ -1,17 +1,27 @@
 import { openAvailability } from './availability.js';
 import {
-  descendantCalendarIds,
-  inheritsBlocks,
-  parentCalendarId,
-  rollsUpTo,
+  descendantsOf,
+  inheritsBlocksIn,
+  parentOf,
+  rollsUpToIn,
 } from './hierarchy.js';
 import { normalizeUuid } from './ids.js';
+import {
+  bookingsOn,
+  buildSnapshotIndex,
+  calendarIn,
+  calendarNotFound,
+  eventsOn,
+  rangeError,
+  slotsOf,
+  sortedCopy,
+  type SnapshotIndex,
+} from './lookup.js';
 import { expandRecurrence } from './recurrence.js';
-import { err, ok } from './result.js';
+import { ok } from './result.js';
 import { overlaps, rangeProblem } from './time.js';
 import type {
   AvailabilityReport,
-  Calendar,
   CalendarSnapshot,
   CalendarView,
   Result,
@@ -21,49 +31,22 @@ import type {
 } from './types.js';
 import { validateSnapshot } from './validate.js';
 
-function rangeError( message: string ): Result<never> {
-  return err( { code: 'range', message } );
-}
-
-function notFound( calendarId: Uuid ): Result<never> {
-  return err( {
-    code: 'not_found',
-    message: 'calendar not found',
-    details: { calendarId },
-  } );
-}
-
-function calendarOf(
-  snapshot: CalendarSnapshot,
-  calendarId: Uuid,
-): Calendar | undefined {
-  const key = normalizeUuid( calendarId );
-  return snapshot.calendars.find(
-    ( row ) => normalizeUuid( row.id ) === key,
-  );
-}
-
 function sortItems( items: ViewItem[] ): ViewItem[] {
-  return items.sort( ( a, b ) => {
+  return sortedCopy( items, ( a, b ) => {
     const start = a.start.localeCompare( b.start );
     return start !== 0 ? start : a.id.localeCompare( b.id );
   } );
 }
 
 function eventItems(
-  snapshot: CalendarSnapshot,
+  index: SnapshotIndex,
   calendarId: Uuid,
   range: TimeRange,
   source: ViewItem['source'],
 ): Result<ViewItem[]> {
-  const calendar = calendarOf( snapshot, calendarId );
-  const timeZone = calendar?.timeZone ?? 'UTC';
-  const key = normalizeUuid( calendarId );
+  const timeZone = calendarIn( index, calendarId )?.timeZone ?? 'UTC';
   const items: ViewItem[] = [];
-  for ( const event of snapshot.events ) {
-    if ( normalizeUuid( event.calendarId ) !== key ) {
-      continue;
-    }
+  for ( const event of eventsOn( index, calendarId ) ) {
     const expanded = expandRecurrence( event, range, timeZone );
     if ( !expanded.ok ) {
       return expanded;
@@ -85,16 +68,12 @@ function eventItems(
 }
 
 function slotItems(
-  snapshot: CalendarSnapshot,
+  index: SnapshotIndex,
   calendarId: Uuid,
   range: TimeRange,
 ): ViewItem[] {
-  const key = normalizeUuid( calendarId );
   const items: ViewItem[] = [];
-  for ( const slot of snapshot.slots ) {
-    if ( normalizeUuid( slot.calendarId ) !== key ) {
-      continue;
-    }
+  for ( const slot of slotsOf( index, calendarId ) ) {
     const occ = { start: slot.start, end: slot.end };
     if ( !overlaps( occ, range ) ) {
       continue;
@@ -113,18 +92,14 @@ function slotItems(
 }
 
 function bookingItems(
-  snapshot: CalendarSnapshot,
+  index: SnapshotIndex,
   calendarId: Uuid,
   range: TimeRange,
   source: ViewItem['source'],
   adHocOnly: boolean,
 ): ViewItem[] {
-  const key = normalizeUuid( calendarId );
   const items: ViewItem[] = [];
-  for ( const booking of snapshot.bookings ) {
-    if ( normalizeUuid( booking.calendarId ) !== key ) {
-      continue;
-    }
+  for ( const booking of bookingsOn( index, calendarId ) ) {
     if (
       adHocOnly &&
       ( booking.eventId !== undefined || booking.slotId !== undefined )
@@ -148,51 +123,47 @@ function bookingItems(
 }
 
 function inheritedItems(
-  snapshot: CalendarSnapshot,
-  calendarId: Uuid,
-  range: TimeRange,
-): Result<ViewItem[]> {
-  if ( !inheritsBlocks( snapshot, calendarId ) ) {
-    return ok( [] );
-  }
-  const parent = parentCalendarId( snapshot, calendarId );
-  if ( parent === undefined ) {
-    return ok( [] );
-  }
-  const events = eventItems( snapshot, parent, range, 'inherited' );
-  if ( !events.ok ) {
-    return events;
-  }
-  const further = inheritedItems( snapshot, parent, range );
-  if ( !further.ok ) {
-    return further;
-  }
-  return ok( [
-    ...events.value,
-    ...bookingItems( snapshot, parent, range, 'inherited', true ),
-    ...further.value,
-  ] );
-}
-
-function rolledUpItems(
-  snapshot: CalendarSnapshot,
+  index: SnapshotIndex,
   calendarId: Uuid,
   range: TimeRange,
 ): Result<ViewItem[]> {
   const items: ViewItem[] = [];
-  for ( const descendant of descendantCalendarIds(
-    snapshot,
-    calendarId,
-  ) ) {
-    if ( !rollsUpTo( snapshot, descendant, calendarId ) ) {
+  const seen = new Set<string>();
+  let current = calendarId;
+  while ( inheritsBlocksIn( index.hierarchy, current ) ) {
+    const parent = parentOf( index.hierarchy, current );
+    if ( parent === undefined ) {
+      break;
+    }
+    const key = normalizeUuid( parent );
+    if ( seen.has( key ) ) {
+      break;
+    }
+    seen.add( key );
+    const events = eventItems( index, parent, range, 'inherited' );
+    if ( !events.ok ) {
+      return events;
+    }
+    items.push(
+      ...events.value,
+      ...bookingItems( index, parent, range, 'inherited', true ),
+    );
+    current = parent;
+  }
+  return ok( items );
+}
+
+function rolledUpItems(
+  index: SnapshotIndex,
+  calendarId: Uuid,
+  range: TimeRange,
+): Result<ViewItem[]> {
+  const items: ViewItem[] = [];
+  for ( const descendant of descendantsOf( index.hierarchy, calendarId ) ) {
+    if ( !rollsUpToIn( index.hierarchy, descendant, calendarId ) ) {
       continue;
     }
-    const events = eventItems(
-      snapshot,
-      descendant,
-      range,
-      'rolled-up',
-    );
+    const events = eventItems( index, descendant, range, 'rolled-up' );
     if ( !events.ok ) {
       return events;
     }
@@ -214,9 +185,11 @@ export function queryAvailability(
   if ( !open.ok ) {
     return open;
   }
-  const calendar = calendarOf( snapshot, calendarId );
+  const calendar = snapshot.calendars.find(
+    ( row ) => normalizeUuid( row.id ) === normalizeUuid( calendarId ),
+  );
   if ( calendar === undefined ) {
-    return notFound( calendarId );
+    return calendarNotFound( calendarId );
   }
   return ok( {
     calendarId: calendar.id,
@@ -242,25 +215,21 @@ export function queryView(
   if ( problem !== undefined ) {
     return rangeError( problem );
   }
-  const calendar = calendarOf( snapshot, calendarId );
+  const index = buildSnapshotIndex( snapshot );
+  const calendar = calendarIn( index, calendarId );
   if ( calendar === undefined ) {
-    return notFound( calendarId );
+    return calendarNotFound( calendarId );
   }
 
-  const ownEvents = eventItems(
-    snapshot,
-    calendar.id,
-    range,
-    'own',
-  );
+  const ownEvents = eventItems( index, calendar.id, range, 'own' );
   if ( !ownEvents.ok ) {
     return ownEvents;
   }
-  const inherited = inheritedItems( snapshot, calendar.id, range );
+  const inherited = inheritedItems( index, calendar.id, range );
   if ( !inherited.ok ) {
     return inherited;
   }
-  const rolledUp = rolledUpItems( snapshot, calendar.id, range );
+  const rolledUp = rolledUpItems( index, calendar.id, range );
   if ( !rolledUp.ok ) {
     return rolledUp;
   }
@@ -270,8 +239,8 @@ export function queryView(
     range: { start: range.start, end: range.end },
     items: sortItems( [
       ...ownEvents.value,
-      ...slotItems( snapshot, calendar.id, range ),
-      ...bookingItems( snapshot, calendar.id, range, 'own', false ),
+      ...slotItems( index, calendar.id, range ),
+      ...bookingItems( index, calendar.id, range, 'own', false ),
       ...inherited.value,
       ...rolledUp.value,
     ] ),

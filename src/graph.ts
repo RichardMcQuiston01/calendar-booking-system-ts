@@ -1,7 +1,7 @@
 import { isUuid, normalizeUuid } from './ids.js';
+import { findIndexById as findIndex, notFound, nowOf } from './lookup.js';
 import { err, ok } from './result.js';
 import { cloneSnapshot, copyRecord, stamp } from './snapshot.js';
-import { nowInstant } from './time.js';
 import type {
   ApplyOptions,
   ApplySuccess,
@@ -16,26 +16,6 @@ import type {
   Uuid,
 } from './types.js';
 import { validateSnapshot } from './validate.js';
-
-function notFound( kind: string, id: Uuid ): Result<never> {
-  return err( {
-    code: 'not_found',
-    message: `${ kind } not found`,
-    details: { id },
-  } );
-}
-
-function findIndex(
-  rows: { id: Uuid }[],
-  id: Uuid,
-): number {
-  const key = normalizeUuid( id );
-  return rows.findIndex( ( row ) => normalizeUuid( row.id ) === key );
-}
-
-function nowOf( opts?: ApplyOptions ): string {
-  return opts?.now ?? nowInstant();
-}
 
 /**
  * Insert or replace an entity. Validates the resulting snapshot.
