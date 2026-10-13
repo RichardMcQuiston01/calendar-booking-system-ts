@@ -272,6 +272,16 @@ teacher when each hop uses `inherit-blocks` or `both`. The teacher’s
 class event appears on the school `queryView` when each hop uses
 `roll-up` or `both`.
 
+## Instants and limits
+
+Every instant (`start`, `end`, `recurrence.until`, query ranges) must be
+a canonical UTC string, `YYYY-MM-DDTHH:mm:ss.sssZ`. Offsets such as
+`+00:00`, missing milliseconds, date-only, and zoneless strings are
+rejected, so serialize database `timestamptz` values with
+`date.toISOString()`. `recurrence.interval` is limited to 1–1000 and
+`count` to 1–10000. An availability rule with `interval > 1` or `count`
+needs a `startDate` (`YYYY-MM-DD`, in the calendar zone) to anchor it.
+
 ## Query example
 
 `queryAvailability` returns UTC intervals where an **ad-hoc** booking
