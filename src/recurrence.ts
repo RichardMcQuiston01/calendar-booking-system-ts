@@ -2,6 +2,7 @@ import { err, ok } from './result.js';
 import {
   civilDateInZone,
   civilFormatter,
+  isValidDateOnly,
   isValidTimeZone,
   overlaps,
   parseInstant,
@@ -52,6 +53,17 @@ export const MAX_RECURRENCE_COUNT = 10000;
 
 /** Most civil dates one expansion will walk before giving up. */
 export const MAX_EXPANDED_DATES = 20000;
+
+/**
+ * True when a rule's phase depends on a fixed start: a stride greater
+ * than 1 or a `count`. Such rules must carry `startDate`.
+ */
+export function ruleNeedsStartDate( rule: AvailabilityRule ): boolean {
+  return (
+    ( rule.recurrence.interval ?? 1 ) > 1 ||
+    rule.recurrence.count !== undefined
+  );
+}
 
 function isCalendarEvent(
   source: CalendarEvent | AvailabilityRule,
@@ -257,10 +269,42 @@ export function expandRecurrence(
     } );
   }
 
+  if (
+    !isCalendarEvent( source ) &&
+    ruleNeedsStartDate( source ) &&
+    source.startDate === undefined
+  ) {
+    return err( {
+      code: 'validation',
+      message:
+        'availability rule needs startDate when recurrence.interval ' +
+        'is greater than 1 or recurrence.count is set',
+      details: { id: source.id },
+    } );
+  }
+  if (
+    !isCalendarEvent( source ) &&
+    source.startDate !== undefined &&
+    !isValidDateOnly( source.startDate )
+  ) {
+    return err( {
+      code: 'validation',
+      message: 'availability rule startDate is not a DateOnly',
+      details: { id: source.id },
+    } );
+  }
+
   const rangeStartDate = civilDateInZone( range.start, zone );
-  const dtStart = isCalendarEvent( source )
-    ? civilDateInZone( source.start, zone )
-    : rangeStartDate;
+  let dtStart: DateOnly;
+  if ( isCalendarEvent( source ) ) {
+    dtStart = civilDateInZone( source.start, zone );
+  } else if ( source.startDate !== undefined ) {
+    dtStart = source.startDate;
+  } else {
+    // One day back so an overnight window that began yesterday and
+    // runs into the range is still considered.
+    dtStart = addDays( rangeStartDate, -1 );
+  }
   const stopDate = addDays( civilDateInZone( range.end, zone ), 1 );
   const excluded = new Set( source.excludedDates ?? [] );
   const byDay = recurrence.byDay;
@@ -313,10 +357,6 @@ export function expandRecurrence(
     }
     return true;
   };
-
-  if ( !isCalendarEvent( source ) ) {
-    consider( addDays( rangeStartDate, -1 ), false );
-  }
 
   let walked = 0;
   for ( const date of iterateCivilDates(

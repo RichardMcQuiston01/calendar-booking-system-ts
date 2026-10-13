@@ -51,6 +51,7 @@ create table availability_rule (
   calendar_id     uuid not null references calendar (id) on delete cascade,
   start_time      time not null,
   end_time        time not null,
+  start_date      date,
   recurrence      jsonb not null,
   excluded_dates  date[],
   created_at      timestamptz not null default now(),
