@@ -1,6 +1,6 @@
 import { isUuid, normalizeUuid } from './ids.js';
 import { err, ok } from './result.js';
-import { cloneSnapshot, stamp } from './snapshot.js';
+import { cloneSnapshot, copyRecord, stamp } from './snapshot.js';
 import { nowInstant } from './time.js';
 import type {
   ApplyOptions,
@@ -54,7 +54,7 @@ export function putEntity(
     : -1;
   const existing = index >= 0 ? snapshot.entities[ index ] : undefined;
   const record: Entity = {
-    ...input,
+    ...copyRecord( input ),
     ...stamp( existing, nowOf( opts ) ),
   };
   const next = cloneSnapshot( snapshot );
@@ -67,7 +67,7 @@ export function putEntity(
   if ( !result.ok ) {
     return result;
   }
-  return ok( { snapshot: next, record } );
+  return ok( { snapshot: next, record: copyRecord( record ) } );
 }
 
 /**
@@ -87,7 +87,7 @@ export function putCalendar(
     : -1;
   const existing = index >= 0 ? snapshot.calendars[ index ] : undefined;
   const record: Calendar = {
-    ...input,
+    ...copyRecord( input ),
     ...stamp( existing, nowOf( opts ) ),
   };
   const next = cloneSnapshot( snapshot );
@@ -100,7 +100,7 @@ export function putCalendar(
   if ( !result.ok ) {
     return result;
   }
-  return ok( { snapshot: next, record } );
+  return ok( { snapshot: next, record: copyRecord( record ) } );
 }
 
 /**
@@ -122,7 +122,7 @@ export function putEntityCalendar(
     ? snapshot.entityCalendars[ index ]
     : undefined;
   const record: EntityCalendar = {
-    ...input,
+    ...copyRecord( input ),
     ...stamp( existing, nowOf( opts ) ),
   };
   const next = cloneSnapshot( snapshot );
@@ -135,7 +135,7 @@ export function putEntityCalendar(
   if ( !result.ok ) {
     return result;
   }
-  return ok( { snapshot: next, record } );
+  return ok( { snapshot: next, record: copyRecord( record ) } );
 }
 
 /**
