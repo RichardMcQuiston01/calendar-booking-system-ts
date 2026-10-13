@@ -527,3 +527,111 @@ describe( 'checkEvent conflict horizon', () => {
     }
   } );
 } );
+
+describe( 'slot seat capacity', () => {
+  const window = {
+    start: '2026-09-08T12:00:00.000Z',
+    end: '2026-09-08T18:00:00.000Z',
+  };
+
+  function snapshotWithBooking(
+    max: number,
+    bookings: Array<{ id: string; start: string; end: string }>,
+  ): ReturnType<typeof schoolTreeSnapshot> {
+    return teacherSnapshot( {
+      slots: [ slotOn( IDS.teacherCal, {
+        ...window,
+        occupancy: { kind: 'capacity', max },
+      } ) ],
+      bookings: bookings.map( ( row ) => ( {
+        ...row,
+        calendarId: IDS.teacherCal,
+        slotId: IDS.slot,
+        createdAt: NOW,
+        updatedAt: NOW,
+      } ) ),
+    } );
+  }
+
+  function seat( start: string, end: string ) {
+    return {
+      id: BOOKING_C,
+      calendarId: IDS.teacherCal,
+      slotId: IDS.slot,
+      start,
+      end,
+    };
+  }
+
+  test( 'non-overlapping booking fits a capacity-1 slot', () => {
+    const snapshot = snapshotWithBooking( 1, [ {
+      id: IDS.booking,
+      start: '2026-09-08T12:00:00.000Z',
+      end: '2026-09-08T13:00:00.000Z',
+    } ] );
+    const result = checkBooking(
+      snapshot,
+      seat( '2026-09-08T15:00:00.000Z', '2026-09-08T16:00:00.000Z' ),
+    );
+    expect( result ).toEqual( {
+      ok: true,
+      value: { conflicts: [], remainingCapacity: 0 },
+    } );
+  } );
+
+  test( 'back-to-back (touching) booking fits a capacity-1 slot', () => {
+    const snapshot = snapshotWithBooking( 1, [ {
+      id: IDS.booking,
+      start: '2026-09-08T12:00:00.000Z',
+      end: '2026-09-08T13:00:00.000Z',
+    } ] );
+    const result = checkBooking(
+      snapshot,
+      seat( '2026-09-08T13:00:00.000Z', '2026-09-08T14:00:00.000Z' ),
+    );
+    expect( result.ok && result.value.conflicts ).toEqual( [] );
+  } );
+
+  test( 'overlapping booking is capacity-full on a capacity-1 slot', () => {
+    const snapshot = snapshotWithBooking( 1, [ {
+      id: IDS.booking,
+      start: '2026-09-08T12:00:00.000Z',
+      end: '2026-09-08T13:00:00.000Z',
+    } ] );
+    const result = checkBooking(
+      snapshot,
+      seat( '2026-09-08T12:30:00.000Z', '2026-09-08T13:30:00.000Z' ),
+    );
+    expect( result.ok ).toBe( true );
+    if ( result.ok ) {
+      expect( result.value.conflicts.map( ( row ) => row.kind ) ).toEqual(
+        [ 'capacity-full' ],
+      );
+    }
+  } );
+
+  test( 'seats are the peak concurrency, not the overlap count', () => {
+    const snapshot = snapshotWithBooking( 2, [
+      {
+        id: IDS.booking,
+        start: '2026-09-08T12:00:00.000Z',
+        end: '2026-09-08T13:00:00.000Z',
+      },
+      {
+        id: BOOKING_B,
+        start: '2026-09-08T14:00:00.000Z',
+        end: '2026-09-08T15:00:00.000Z',
+      },
+    ] );
+    // Two existing bookings overlap the candidate but never each
+    // other, so at most 1 + the candidate = 2 seats are ever in use.
+    const result = checkBooking(
+      snapshot,
+      seat( '2026-09-08T12:30:00.000Z', '2026-09-08T14:30:00.000Z' ),
+    );
+    expect( result ).toEqual( {
+      ok: true,
+      value: { conflicts: [], remainingCapacity: 0 },
+    } );
+  } );
+} );

@@ -607,6 +607,33 @@ function collectEventSeat(
   } );
 }
 
+/**
+ * Highest number of `rows` that are active at the same instant inside
+ * `within`. Rows that only touch or lie outside `within` do not count.
+ */
+function peakConcurrency(
+  rows: Occurrence[],
+  within: Occurrence,
+): number {
+  const lower = Date.parse( within.start );
+  const upper = Date.parse( within.end );
+  const probes = [
+    lower,
+    ...rows
+      .map( ( row ) => Date.parse( row.start ) )
+      .filter( ( at ) => at > lower && at < upper ),
+  ];
+  let peak = 0;
+  for ( const at of probes ) {
+    const active = rows.filter(
+      ( row ) =>
+        Date.parse( row.start ) <= at && at < Date.parse( row.end ),
+    ).length;
+    peak = Math.max( peak, active );
+  }
+  return peak;
+}
+
 function collectSlotSeat(
   snapshot: CalendarSnapshot,
   record: Booking,
@@ -641,7 +668,7 @@ function collectSlotSeat(
   }
   const key = normalizeUuid( slot.id );
   const self = normalizeUuid( record.id );
-  const current = snapshot.bookings.filter( ( row ) => {
+  const others = snapshot.bookings.filter( ( row ) => {
     if ( row.slotId === undefined ) {
       return false;
     }
@@ -651,8 +678,11 @@ function collectSlotSeat(
     if ( normalizeUuid( row.id ) === self ) {
       return false;
     }
-    return true;
-  } ).length;
+    return overlaps( { start: row.start, end: row.end }, bookingOcc );
+  } );
+  // A slot is a window of time, not one session: only bookings that
+  // share an instant with the candidate hold seats against it.
+  const current = peakConcurrency( others, bookingOcc );
   const max = occupancyMax( slot.occupancy );
   const conflicts: Conflict[] = [];
   if ( current + 1 > max ) {
