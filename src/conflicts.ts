@@ -747,6 +747,40 @@ function collectAdHoc(
   return ok( { conflicts } );
 }
 
+/**
+ * Other bookings in the snapshot held by the same attendee that
+ * overlap the candidate. An attendee cannot hold two seats in one
+ * occurrence or be in two places at once. Only bookings the host has
+ * loaded can be seen, so hosts must load an attendee's other
+ * bookings to get a cross-calendar check.
+ */
+function attendeeConflicts(
+  snapshot: CalendarSnapshot,
+  record: Booking,
+): Conflict[] {
+  if ( record.attendeeId === undefined ) {
+    return [];
+  }
+  const attendee = normalizeUuid( record.attendeeId );
+  const self = normalizeUuid( record.id );
+  const candidate = { start: record.start, end: record.end };
+  return snapshot.bookings
+    .filter(
+      ( row ) =>
+        row.attendeeId !== undefined &&
+        normalizeUuid( row.attendeeId ) === attendee &&
+        normalizeUuid( row.id ) !== self &&
+        overlaps( { start: row.start, end: row.end }, candidate ),
+    )
+    .map( ( row ): Conflict => ( {
+      kind: 'attendee-conflict',
+      calendarId: row.calendarId,
+      start: row.start,
+      end: row.end,
+      source: { type: 'booking', id: row.id },
+    } ) );
+}
+
 function collectBookingConflicts(
   snapshot: CalendarSnapshot,
   record: Booking,
@@ -754,13 +788,24 @@ function collectBookingConflicts(
   if ( calendarOf( snapshot, record.calendarId ) === undefined ) {
     return notFound( 'calendar', record.calendarId );
   }
+  let report: Result<CheckReport>;
   if ( record.eventId !== undefined ) {
-    return collectEventSeat( snapshot, record, record.eventId );
+    report = collectEventSeat( snapshot, record, record.eventId );
+  } else if ( record.slotId !== undefined ) {
+    report = collectSlotSeat( snapshot, record, record.slotId );
+  } else {
+    report = collectAdHoc( snapshot, record );
   }
-  if ( record.slotId !== undefined ) {
-    return collectSlotSeat( snapshot, record, record.slotId );
+  if ( !report.ok ) {
+    return report;
   }
-  return collectAdHoc( snapshot, record );
+  return ok( {
+    ...report.value,
+    conflicts: [
+      ...report.value.conflicts,
+      ...attendeeConflicts( snapshot, record ),
+    ],
+  } );
 }
 
 function requireCalendar(

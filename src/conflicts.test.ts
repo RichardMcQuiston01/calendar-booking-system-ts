@@ -635,3 +635,100 @@ describe( 'slot seat capacity', () => {
     } );
   } );
 } );
+
+describe( 'attendee conflicts', () => {
+  const capacityEvent = eventOn( IDS.teacherCal, {
+    occupancy: { kind: 'capacity', max: 5 },
+  } );
+
+  /** School tree plus a student entity so attendee ids resolve. */
+  function withStudent(
+    snapshot: ReturnType<typeof schoolTreeSnapshot>,
+  ): ReturnType<typeof schoolTreeSnapshot> {
+    snapshot.entities.push( {
+      id: IDS.student,
+      entityType: 'student',
+      name: 'Student',
+      parentId: IDS.section,
+      createdAt: NOW,
+      updatedAt: NOW,
+    } );
+    return snapshot;
+  }
+
+  function held(
+    id: string,
+    overrides: Partial<Booking> = {},
+  ): Booking {
+    return {
+      id,
+      calendarId: IDS.teacherCal,
+      eventId: IDS.event,
+      attendeeId: IDS.student,
+      ...AT_13_14,
+      createdAt: NOW,
+      updatedAt: NOW,
+      ...overrides,
+    };
+  }
+
+  test( 'same attendee cannot take a second seat on one occurrence', () => {
+    const snapshot = withStudent( teacherSnapshot( {
+      events: [ capacityEvent ],
+      bookings: [ held( IDS.booking ) ],
+    } ) );
+    const result = checkBooking( snapshot, {
+      id: BOOKING_B,
+      calendarId: IDS.teacherCal,
+      eventId: IDS.event,
+      attendeeId: IDS.student,
+      ...AT_13_14,
+    } );
+    expect( result.ok ).toBe( true );
+    if ( result.ok ) {
+      expect( result.value.conflicts ).toEqual( [ {
+        kind: 'attendee-conflict',
+        calendarId: IDS.teacherCal,
+        ...AT_13_14,
+        source: { type: 'booking', id: IDS.booking },
+      } ] );
+    }
+  } );
+
+  test( 'attendee double-booked on another calendar is reported', () => {
+    const snapshot = withStudent( teacherSnapshot( {
+      events: [ capacityEvent ],
+      bookings: [ held( IDS.booking, {
+        calendarId: IDS.sectionCal,
+        eventId: undefined,
+      } ) ],
+    } ) );
+    const result = checkBooking( snapshot, {
+      id: BOOKING_B,
+      calendarId: IDS.teacherCal,
+      eventId: IDS.event,
+      attendeeId: IDS.student,
+      ...AT_13_14,
+    } );
+    expect(
+      result.ok && result.value.conflicts.map( ( row ) => row.kind ),
+    ).toContain( 'attendee-conflict' );
+  } );
+
+  test( 'different attendee, adjacent time, and self do not conflict', () => {
+    const snapshot = withStudent( teacherSnapshot( {
+      events: [ capacityEvent ],
+      bookings: [ held( IDS.booking ) ],
+    } ) );
+    const other = checkBooking( snapshot, {
+      id: BOOKING_B,
+      calendarId: IDS.teacherCal,
+      eventId: IDS.event,
+      attendeeId: IDS.teacher,
+      ...AT_13_14,
+    } );
+    expect( other.ok && other.value.conflicts ).toEqual( [] );
+    const self = checkBooking( snapshot, held( IDS.booking ) );
+    expect( self.ok && self.value.conflicts ).toEqual( [] );
+  } );
+} );

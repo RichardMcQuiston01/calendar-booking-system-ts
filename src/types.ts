@@ -170,7 +170,8 @@ export interface Conflict {
     | 'inherited-block'
     | 'capacity-full'
     | 'outside-availability'
-    | 'outside-target';
+    | 'outside-target'
+    | 'attendee-conflict';
   calendarId: Uuid;
   start: Instant;
   end: Instant;
