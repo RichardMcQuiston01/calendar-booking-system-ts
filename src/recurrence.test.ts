@@ -467,3 +467,21 @@ test( 'until compares epoch time, not strings', () => {
     ] );
   }
 } );
+
+test( 'duplicate byDay yields each weekday once', () => {
+  const result = expandRecurrence(
+    event(
+      { freq: 'weekly', byDay: [ 'TU', 'TU' ] },
+      {
+        start: '2026-09-08T13:00:00.000Z',
+        end: '2026-09-08T14:00:00.000Z',
+      },
+    ),
+    civilRange( '2026-09-08', '2026-09-09' ),
+    TZ,
+  );
+  expect( result.ok ).toBe( true );
+  if ( result.ok ) {
+    expect( result.value ).toHaveLength( 1 );
+  }
+} );

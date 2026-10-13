@@ -112,6 +112,9 @@ function recurrenceMessage(
     ) {
       return 'recurrence.byDay has an invalid weekday';
     }
+    if ( new Set( rule.byDay ).size !== rule.byDay.length ) {
+      return 'recurrence.byDay must not repeat a weekday';
+    }
   }
   return undefined;
 }

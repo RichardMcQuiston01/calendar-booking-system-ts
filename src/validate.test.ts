@@ -184,6 +184,17 @@ describe( 'validateSnapshot', () => {
     } );
   } );
 
+  test( 'rejects a repeated byDay weekday', () => {
+    const snapshot = schoolTreeSnapshot();
+    snapshot.events.push( eventOn( IDS.schoolCal, {
+      recurrence: { freq: 'weekly', byDay: [ 'TU', 'TU' ] },
+    } ) );
+    expect( validateSnapshot( snapshot ) ).toMatchObject( {
+      ok: false,
+      error: { code: 'validation' },
+    } );
+  } );
+
   test( 'rejects an empty entityType', () => {
     const snapshot = schoolTreeSnapshot();
     snapshot.entities[ 0 ].entityType = '';
