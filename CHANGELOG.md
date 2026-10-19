@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.1] - 2026-10-19
+
+Packaging-only release. No code change.
+
+### Added
+
+- `funding` entry in `package.json` so `npm fund` and the npm page show
+  the donate link (#45)
+
 ## [0.3.0] - 2026-10-13
 
 Performance and internals release. No behavior change and no public
