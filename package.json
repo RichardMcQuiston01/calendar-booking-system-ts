@@ -4,6 +4,10 @@
   "description": "Framework-agnostic TypeScript engine for hierarchical scheduling and booking",
   "author": "Richard McQuiston <richard.mcquiston01@gmail.com>",
   "license": "Apache-2.0",
+  "funding": {
+    "type": "individual",
+    "url": "https://donate.stripe.com/00w5kD3Gj1Xo9v7gVOcs800"
+  },
   "type": "module",
   "repository": {
     "type": "git",
